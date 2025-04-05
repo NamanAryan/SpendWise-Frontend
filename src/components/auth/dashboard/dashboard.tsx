@@ -601,6 +601,14 @@ export default function Dashboard(): JSX.Element {
     window.open(externalChatUrl, "_blank");
   };
 
+  interface Challenge {
+    id: number;
+    title: string;
+    progress: number;
+    reward: string;
+    active: boolean;
+  }
+  
   const challenges: Challenge[] = [
     {
       id: 1,
