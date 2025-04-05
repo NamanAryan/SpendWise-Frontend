@@ -13,79 +13,23 @@ import {
   Plus,
   X,
 } from "lucide-react";
-
+import FinancialHealthScore from "./FinanceHealthCare";
 interface Transaction {
-  _id: string;
-  Description: string;
-  Amount: number;
-  Date: string;
-  Category: string;
-  is_Need: string;
-  Time_of_Day: string;
-  Payment_Mode: string;
-  Impulse_Tag: boolean;
-  free_impulse_purchase?: boolean;
-  User_ID: string;
-  Source_App?: string;
-  // UI helper fields
-  type?: "income" | "expense";
-  status?: "completed" | "pending";
+  id: number;
+  description: string;
+  amount: number;
+  date: string;
+  category: string;
+  type: "income" | "expense";
+  status: "completed" | "pending";
 }
 
-interface StreakData {
-  currentStreak: number;
-  longestStreak: number;
-  completedStreaks: number;
-  freeImpulsePurchases: number;
-  activeVouchers: Voucher[];
-  usedVouchers: Voucher[];
-  lastNonImpulseDate?: string;
-}
-
-interface Voucher {
-  _id: string;
-  voucherType: "weekly" | "monthly";
-  earnedAt: string;
-  used: boolean;
-  expiresAt: string;
-}
-
-interface DashboardData {
-  financialStats: {
-    totalExpenses: number;
-    impulseExpenses: number;
-    nonImpulseExpenses: number;
-    totalAmount: number;
-    impulseAmount: number;
-    nonImpulseAmount: number;
-    impulsePercentage: number;
-    savedAmount: number;
-    categoryBreakdown: any[];
-  };
-  streakInfo: {
-    currentStreakEmoji: string;
-    streakProgress: string;
-    streakProgressPercent: number;
-    nextMilestone: number;
-    completedStreaks: number;
-    freeImpulsePurchases: number;
-    activeVouchers: number;
-    freeImpulseProgress: string;
-    freeImpulseProgressPercent: number;
-    longestStreak: number;
-  };
-  recentTransactions: Transaction[];
-  monthlyTrends: {
-    month: string;
-    totalSpent: number;
-    impulseSpent: number;
-    nonImpulseSpent: number;
-    impulsePct: string;
-  }[];
-  rewards: {
-    activeVouchers: Voucher[];
-    freeImpulsePurchases: number;
-  };
+interface Challenge {
+  id: number;
+  title: string;
+  progress: number;
+  reward: string;
+  active: boolean;
 }
 
 interface UserProfile {
@@ -113,16 +57,16 @@ interface TransactionFormData {
   Time_of_Day: string;
   Payment_Mode: string;
   Impulse_Tag: boolean;
+  type: "income" | "expense";
 }
 
-type TabType = "dashboard" | "transactions" | "chat";
-
 export default function Dashboard(): JSX.Element {
-  const [score, setScore] = useState<number>(72);
-  const [loading, setLoading] = useState<boolean>(false);
   const [balance, setBalance] = useState<number>(0);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [score, setScore] = useState<number>(0);
+  type TabType = "dashboard" | "transactions" | "chat";
+  const [loading, setLoading] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(true);
   const [user, setUser] = useState<UserProfile>({
     name: "Loading...",
@@ -148,31 +92,17 @@ export default function Dashboard(): JSX.Element {
   const [formData, setFormData] = useState<TransactionFormData>({
     Description: "",
     Amount: 0,
-    Date: new Date().toISOString().split("T")[0],
+    Date: "",
     Category: "",
     is_Need: "Need",
     Time_of_Day: "Morning",
-    Payment_Mode: "UPI",
+    Payment_Mode: "",
     Impulse_Tag: false,
+    type: "expense", // or 'income' by default
   });
-
-  const [streakData, setStreakData] = useState<StreakData>({
-    currentStreak: 0,
-    longestStreak: 0,
-    completedStreaks: 0,
-    freeImpulsePurchases: 0,
-    activeVouchers: [],
-    usedVouchers: [],
-  });
-
-  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
-  const [dashboardLoading, setDashboardLoading] = useState<boolean>(true);
-  const [showRewardModal, setShowRewardModal] = useState<boolean>(false);
-  const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
-  const [usingFreeImpulse, setUsingFreeImpulse] = useState<boolean>(false);
 
   // External chat URL
-  const externalChatUrl = "https://example.com/financial-chat";
+  const externalChatUrl = "https://client-two-woad-92.vercel.app/";
 
   const handleAddMoneyInputChange = (
     e: React.ChangeEvent<
@@ -185,6 +115,213 @@ export default function Dashboard(): JSX.Element {
       [name]: name === "amount" ? Number(value) : value,
     });
   };
+
+  const calculateFinanceHealthScore = (
+    balance: number,
+    transactions: Array<any>
+  ): number => {
+    const recentTransactions = [...transactions]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5); // Get the 5 most recent transactions
+
+    // Base score components
+    let balanceScore = 0;
+    let transactionScore = 0;
+    let savingsScore = 0;
+    let consistencyScore = 0;
+
+    // 1. Balance component (40% of total score)
+    if (balance >= 5000) balanceScore = 40;
+    else if (balance >= 3000) balanceScore = 30;
+    else if (balance >= 1000) balanceScore = 20;
+    else if (balance >= 500) balanceScore = 10;
+    else balanceScore = Math.max(5, Math.floor(balance / 100)); // 1 point per $100, minimum 5
+
+    // 2. Transaction patterns (20% of total score)
+    const incomes = recentTransactions.filter((t) => t.amount > 0);
+    const expenses = recentTransactions.filter((t) => t.amount < 0);
+
+    // Calculate income to expense ratio
+    const totalIncome = incomes.reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = Math.abs(
+      expenses.reduce((sum, t) => sum + t.amount, 0) || 0
+    );
+
+    if (totalExpense === 0) {
+      transactionScore = 20; // No expenses is great for the score
+    } else {
+      const ratio = totalIncome / totalExpense;
+      if (ratio >= 1.5) transactionScore = 20;
+      else if (ratio >= 1.2) transactionScore = 15;
+      else if (ratio >= 1.0) transactionScore = 10;
+      else if (ratio >= 0.8) transactionScore = 5;
+      else transactionScore = 0;
+    }
+
+    // 3. Savings potential (20% of total score)
+    // Net flow from recent transactions
+    const netFlow = recentTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    if (netFlow > 0) {
+      // Positive flow indicates savings
+      const savingsRate = netFlow / (totalIncome || 1); // Avoid division by zero
+      if (savingsRate >= 0.3) savingsScore = 20;
+      else if (savingsRate >= 0.2) savingsScore = 15;
+      else if (savingsRate >= 0.1) savingsScore = 10;
+      else savingsScore = 5;
+    } else {
+      // Negative flow - reduce score based on severity
+      const burnRate = Math.abs(netFlow) / (balance || 1); // Avoid division by zero
+      if (burnRate >= 0.5) savingsScore = 0;
+      else if (burnRate >= 0.3) savingsScore = 3;
+      else if (burnRate >= 0.1) savingsScore = 5;
+      else savingsScore = 8;
+    }
+
+    // 4. Consistency score (20% of total score)
+    if (recentTransactions.length >= 3) {
+      // Check spending consistency
+      const expenseAmounts = expenses.map((t) => Math.abs(t.amount));
+
+      if (expenseAmounts.length >= 2) {
+        const avgExpense =
+          expenseAmounts.reduce((sum, amount) => sum + amount, 0) /
+          expenseAmounts.length;
+        const variance =
+          expenseAmounts.reduce(
+            (sum, amount) => sum + Math.pow(amount - avgExpense, 2),
+            0
+          ) / expenseAmounts.length;
+        const stdDev = Math.sqrt(variance);
+
+        // Calculate coefficient of variation (lower is more consistent)
+        const cv = stdDev / (avgExpense || 1); // Avoid division by zero
+
+        if (cv < 0.2) consistencyScore = 20; // Very consistent spending
+        else if (cv < 0.4) consistencyScore = 15;
+        else if (cv < 0.6) consistencyScore = 10;
+        else if (cv < 0.8) consistencyScore = 5;
+        else consistencyScore = 0; // Very inconsistent spending
+      } else {
+        consistencyScore = 10; // Not enough expense data for consistency
+      }
+    } else {
+      consistencyScore = 10; // Not enough transaction data for consistency
+    }
+
+    // Calculate final score (sum of all components)
+    const finalScore =
+      balanceScore + transactionScore + savingsScore + consistencyScore;
+
+    // Clamp the score between 0 and 100
+    return Math.max(0, Math.min(100, finalScore));
+  };
+
+  // 2. Replace your existing useEffect for score calculation
+  
+  useEffect(() => {
+    if (transactions.length > 0 || user.balance !== undefined) {
+      const newScore = calculateFinanceHealthScore(user.balance, transactions);
+      setScore(newScore);
+    }
+  }, [transactions, user.balance]);
+
+  // 3. Create a function to get detailed score breakdown
+  const getScoreBreakdown = (): {
+    balanceScore: number;
+    transactionScore: number;
+    savingsScore: number;
+    consistencyScore: number;
+  } => {
+    // Calculate component scores for display purposes
+    let balanceScore = 0;
+    if (user.balance >= 5000) balanceScore = 40;
+    else if (user.balance >= 3000) balanceScore = 30;
+    else if (user.balance >= 1000) balanceScore = 20;
+    else if (user.balance >= 500) balanceScore = 10;
+    else balanceScore = Math.max(5, Math.floor(user.balance / 100));
+
+    const recentTransactions = [...transactions]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 5);
+
+    const incomes = recentTransactions.filter((t) => t.amount > 0);
+    const expenses = recentTransactions.filter((t) => t.amount < 0);
+
+    const totalIncome = incomes.reduce((sum, t) => sum + t.amount, 0);
+    const totalExpense = Math.abs(
+      expenses.reduce((sum, t) => sum + t.amount, 0) || 0
+    );
+
+    // Calculate transaction score
+    let transactionScore = 0;
+    if (totalExpense === 0) {
+      transactionScore = 20;
+    } else {
+      const ratio = totalIncome / totalExpense;
+      if (ratio >= 1.5) transactionScore = 20;
+      else if (ratio >= 1.2) transactionScore = 15;
+      else if (ratio >= 1.0) transactionScore = 10;
+      else if (ratio >= 0.8) transactionScore = 5;
+      else transactionScore = 0;
+    }
+
+    // Calculate savings score
+    let savingsScore = 0;
+    const netFlow = recentTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+    if (netFlow > 0) {
+      const savingsRate = netFlow / (totalIncome || 1);
+      if (savingsRate >= 0.3) savingsScore = 20;
+      else if (savingsRate >= 0.2) savingsScore = 15;
+      else if (savingsRate >= 0.1) savingsScore = 10;
+      else savingsScore = 5;
+    } else {
+      const burnRate = Math.abs(netFlow) / (user.balance || 1);
+      if (burnRate >= 0.5) savingsScore = 0;
+      else if (burnRate >= 0.3) savingsScore = 3;
+      else if (burnRate >= 0.1) savingsScore = 5;
+      else savingsScore = 8;
+    }
+
+    // Calculate consistency score
+    let consistencyScore = 10; // Default
+
+    if (expenses.length >= 2) {
+      const expenseAmounts = expenses.map((t) => Math.abs(t.amount));
+      const avgExpense =
+        expenseAmounts.reduce((sum, amount) => sum + amount, 0) /
+        expenseAmounts.length;
+      const variance =
+        expenseAmounts.reduce(
+          (sum, amount) => sum + Math.pow(amount - avgExpense, 2),
+          0
+        ) / expenseAmounts.length;
+      const stdDev = Math.sqrt(variance);
+      const cv = stdDev / (avgExpense || 1);
+
+      if (cv < 0.2) consistencyScore = 20;
+      else if (cv < 0.4) consistencyScore = 15;
+      else if (cv < 0.6) consistencyScore = 10;
+      else if (cv < 0.8) consistencyScore = 5;
+      else consistencyScore = 0;
+    }
+
+    return { balanceScore, transactionScore, savingsScore, consistencyScore };
+  };
+
+  // 4. Enhanced getHealthStatus function with more detailed messages
+  // Removed duplicate declaration of getHealthStatus
+
+  // 5. Function to get detailed health message
+
+  // Add this to your useEffect section
+  useEffect(() => {
+    if (transactions.length > 0 && user.balance !== undefined) {
+      const newScore = calculateFinanceHealthScore(user.balance, transactions);
+      setScore(newScore);
+    }
+  }, [transactions, user.balance]);
 
   const handleAddMoney = async (amount: number) => {
     try {
@@ -209,12 +346,20 @@ export default function Dashboard(): JSX.Element {
         console.error("Failed to update balance:", data.message);
       } else {
         console.log("Balance updated successfully:", data.balance);
-        setBalance(data.balance); // 👈 update your frontend state
+        setBalance(data.balance); // update UI state
+        window.location.reload(); //
       }
     } catch (error) {
       console.error("Error in handleAddMoney:", error);
     }
   };
+
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem("user") || "{}");
+    if (userData && typeof userData.balalnce === "number") {
+      setBalance(userData.balalnce); // Use correct spelling if it's "balance"
+    }
+  }, []);
 
   // Fetch user profile
   useEffect(() => {
@@ -308,129 +453,40 @@ export default function Dashboard(): JSX.Element {
 
   // Fetch transactions
   const fetchTransactions = async () => {
-    setTransactionsLoading(true);
     try {
       const token = localStorage.getItem("token");
-      if (token) {
-        const response = await fetch("/api/expenses/my-expenses", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          // Transform backend data to match Transaction interface
-          const formattedTransactions = data.expenses?.map((item: any) => ({
-            _id: item._id,
-            Description: item.Description,
-            Amount: item.Amount,
-            Date: item.Date,
-            Category: item.Category,
-            is_Need: item.is_Need,
-            Time_of_Day: item.Time_of_Day,
-            Payment_Mode: item.Payment_Mode,
-            Impulse_Tag: item.Impulse_Tag,
-            User_ID: item.User_ID,
-            Source_App: item.Source_App,
-            // Add these properties for UI display
-            type: "expense", // Assume expenses by default
-            status: "completed", // Default status
-          })) || [];
-          setTransactions(formattedTransactions);
-        } else {
-          console.error("Failed to fetch transactions");
-        }
+      if (!token) return;
+
+      const response = await fetch("/api/expenses", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const formatted = data.map((item: any) => ({
+          id: item._id,
+          description: item.Description,
+          amount: item.Amount,
+          date: item.Date,
+          category: item.Category,
+          type: item.Amount > 0 ? "income" : "expense",
+        }));
+        console.log("Fetched transactions:", formatted);
+
+        setTransactions(formatted);
+      } else {
+        console.error("Failed to fetch transactions");
       }
     } catch (err) {
-      console.error("Error fetching transactions:", err);
-    } finally {
-      setTransactionsLoading(false);
+      console.error("Error:", err);
     }
   };
 
   useEffect(() => {
     fetchTransactions();
-  }, []);
-
-  // Fetch comprehensive dashboard data
-  const fetchDashboardData = async () => {
-    setDashboardLoading(true);
-    try {
-      const token = localStorage.getItem("token");
-      if (token) {
-        const response = await fetch("/api/dashboard", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success) {
-            setDashboardData(data);
-
-            // Update score based on financial health
-            const impulsePct = data.financialStats.impulsePercentage;
-            const newScore = Math.max(0, 100 - impulsePct * 1.5);
-            setScore(Math.round(newScore));
-          }
-        } else {
-          console.error("Failed to fetch dashboard data");
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching dashboard data:", err);
-    } finally {
-      setDashboardLoading(false);
-    }
-  };
-
-  // Fetch streak data
-  const fetchStreakData = async () => {
-    try {
-      const token = localStorage.getItem("token");
-      if (token) {
-        const response = await fetch("/api/streaks/mystreak", {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data.success && data.streak) {
-            setStreakData({
-              currentStreak: data.streak.currentStreak,
-              longestStreak: data.streak.longestStreak,
-              completedStreaks: data.streak.completedStreaks,
-              freeImpulsePurchases: data.streak.freeImpulsePurchases,
-              activeVouchers:
-                data.streak.vouchersEarned?.filter(
-                  (v: Voucher) =>
-                    !v.used && new Date(v.expiresAt) > new Date()
-                ) || [],
-              usedVouchers:
-                data.streak.vouchersEarned?.filter((v: Voucher) => v.used) ||
-                [],
-            });
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Error fetching streak data:", err);
-    }
-  };
-
-  useEffect(() => {
-    fetchDashboardData();
-    fetchStreakData();
   }, []);
 
   const handleInputChange = (
@@ -451,10 +507,6 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
-  const toggleFreeImpulse = () => {
-    setUsingFreeImpulse(!usingFreeImpulse);
-  };
-
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
@@ -462,11 +514,16 @@ export default function Dashboard(): JSX.Element {
     try {
       const token = localStorage.getItem("token");
 
-      // Convert amount to negative for expenses
-      const expenseAmount = -Math.abs(Number(formData.Amount));
+      // Determine if it's an expense or income
+      const isExpense = formData.type === "expense";
 
-      // Check if user has sufficient balance (skip check if using free impulse)
-      if (!usingFreeImpulse && user.balance + expenseAmount < 0) {
+      // Make amount negative for expense, positive for income
+      const adjustedAmount = isExpense
+        ? -Math.abs(Number(formData.Amount))
+        : Math.abs(Number(formData.Amount));
+
+      // Check balance only for expenses
+      if (isExpense && user.balance + adjustedAmount < 0) {
         alert("Insufficient balance for this transaction.");
         setFormSubmitting(false);
         return;
@@ -474,10 +531,9 @@ export default function Dashboard(): JSX.Element {
 
       const formattedData = {
         ...formData,
-        Amount: expenseAmount,
+        Amount: adjustedAmount,
         User_ID: user.email || "user@example.com",
-        Source_App: "SpendWise",
-        useFreeImpulse: formData.Impulse_Tag && usingFreeImpulse,
+        Source_App: "FinanceApp",
       };
 
       console.log("Submitting transaction data:", formattedData);
@@ -499,15 +555,8 @@ export default function Dashboard(): JSX.Element {
         // Update user balance in state
         setUser((prevUser) => ({
           ...prevUser,
-          balance: data.expense?.Amount
-            ? prevUser.balance + data.expense.Amount
-            : prevUser.balance,
+          balance: data.newBalance,
         }));
-
-        // Check if a reward was earned
-        if (data.reward) {
-          alert(`${data.reward.message}`);
-        }
 
         // Reset form
         setFormData({
@@ -519,16 +568,12 @@ export default function Dashboard(): JSX.Element {
           Time_of_Day: "Morning",
           Payment_Mode: "UPI",
           Impulse_Tag: false,
+          type: "expense", // default to expense
         });
 
-        // Reset free impulse state
-        setUsingFreeImpulse(false);
-
-        // Close the form and refresh transactions
+        // Close form and refresh data
         setShowTransactionForm(false);
         fetchTransactions();
-        fetchStreakData();
-        fetchDashboardData();
 
         alert("Transaction added successfully!");
       } else {
@@ -543,37 +588,6 @@ export default function Dashboard(): JSX.Element {
       alert("Network error. Please check your connection and try again.");
     } finally {
       setFormSubmitting(false);
-    }
-  };
-
-  const useVoucher = async (voucherId: string) => {
-    try {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      const response = await fetch(`/api/streaks/use-voucher/${voucherId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Update streak data to reflect voucher usage
-          fetchStreakData();
-          alert("Voucher used successfully!");
-          setSelectedVoucher(null);
-        }
-      } else {
-        const error = await response.json();
-        alert(error.message || "Failed to use voucher");
-      }
-    } catch (err) {
-      console.error("Error using voucher:", err);
-      alert("Error using voucher. Please try again.");
     }
   };
 
@@ -601,14 +615,6 @@ export default function Dashboard(): JSX.Element {
     window.open(externalChatUrl, "_blank");
   };
 
-  interface Challenge {
-    id: number;
-    title: string;
-    progress: number;
-    reward: string;
-    active: boolean;
-  }
-  
   const challenges: Challenge[] = [
     {
       id: 1,
@@ -944,6 +950,24 @@ export default function Dashboard(): JSX.Element {
                       />
                     </div>
 
+                    {/* Transaction Type Dropdown */}
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Transaction Type
+                      </label>
+                      <select
+                        name="type"
+                        value={formData.type}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select Type</option>
+                        <option value="expense">Expense</option>
+                        <option value="income">Income</option>
+                      </select>
+                    </div>
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Date
@@ -1034,19 +1058,6 @@ export default function Dashboard(): JSX.Element {
                         Impulse Purchase
                       </label>
                     </div>
-
-                    <div className="space-y-2 flex items-center">
-                      <label className="flex items-center text-sm font-medium text-gray-700">
-                        <input
-                          type="checkbox"
-                          name="useFreeImpulse"
-                          checked={usingFreeImpulse}
-                          onChange={toggleFreeImpulse}
-                          className="mr-2 h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        Use Free Impulse
-                      </label>
-                    </div>
                   </div>
 
                   <div className="pt-4 flex justify-end gap-3">
@@ -1073,546 +1084,95 @@ export default function Dashboard(): JSX.Element {
           {activeTab === "dashboard" && (
             <>
               {/* Financial Health Score */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-4 pb-0">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold flex items-center gap-2">
-                      <Shield className="w-5 h-5 text-blue-500" />
-                      Financial Health Score
-                    </h2>
-                    <button
-                      onClick={() => setShowTransactionForm(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Add Transaction
-                    </button>
-                  </div>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Your overall financial wellness indicator (updated weekly)
-                  </p>
-                </div>
-                <div className="p-4">
-                  <div className="flex flex-col items-center py-6">
-                    {/* Circular Progress Bar */}
-                    <div className="relative w-48 h-48 mb-6">
-                      <div className="absolute inset-0 rounded-full border-8 border-gray-200"></div>
-                      <div
-                        className={`absolute inset-0 rounded-full border-8 ${getHealthColor()} border-opacity-90`}
-                        style={{
-                          clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%)`,
-                          transform: `rotate(${score * 1.8}deg)`,
-                        }}
-                      ></div>
-                      <div className="absolute inset-4 rounded-full bg-white flex flex-col items-center justify-center">
-                        <span className="text-4xl font-bold">{score}</span>
-                        <span className="text-sm text-gray-500">
-                          out of 100
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Status and Action Buttons */}
-                    <div className="text-center mb-6">
-                      <h3 className="text-xl font-semibold mb-2">
-                        {getHealthStatus()} Health
-                      </h3>
-                      <p className="text-gray-600 max-w-md mb-4">
-                        {score >= 80
-                          ? "Your finances are in excellent shape! Keep up the good habits."
-                          : score >= 60
-                          ? "You're doing well, but there's room for improvement in some areas."
-                          : score >= 40
-                          ? "Your finances need attention. Consider reviewing your budget."
-                          : "Your finances require immediate attention. Seek financial advice if needed."}
-                      </p>
-                      <div className="flex gap-3 justify-center">
-                        <button
-                          onClick={refreshScore}
-                          disabled={loading}
-                          className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {loading ? "Refreshing..." : "Refresh Score"}
-                        </button>
-                        <button className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium">
-                          View Details
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Streak Card */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-4 pb-0">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Shield className="w-5 h-5 text-orange-500" />
-                    Your Impulse Streak
-                  </h2>
-                </div>
-                <div className="p-4">
-                  <div className="flex flex-col items-center text-center">
-                    {/* Streak Circle */}
-                    <div className="relative w-32 h-32 mb-4">
-                      <div className="absolute inset-0 rounded-full border-4 border-gray-100"></div>
-                      <div
-                        className="absolute inset-0 rounded-full border-4 border-blue-500"
-                        style={{
-                          clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%)`,
-                          transform: `rotate(${(streakData.currentStreak / 7) * 360}deg)`,
-                        }}
-                      ></div>
-                      <div className="absolute inset-0 flex items-center justify-center flex-col">
-                        <span className="text-3xl font-bold">
-                          {streakData.currentStreak}
-                        </span>
-                        <span className="text-xs text-gray-500">day streak</span>
-                      </div>
-                    </div>
-
-                    {/* Streak Info */}
-                    <div className="space-y-2 w-full">
-                      <div className="flex justify-between text-sm">
-                        <span>Current Streak:</span>
-                        <span className="font-semibold">
-                          {streakData.currentStreak} days
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Longest Streak:</span>
-                        <span className="font-semibold">
-                          {streakData.longestStreak} days
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Completed Streaks:</span>
-                        <span className="font-semibold">
-                          {streakData.completedStreaks}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
-                        <span>Next Milestone:</span>
-                        <span className="font-semibold">
-                          {7 - (streakData.currentStreak % 7)} days
-                        </span>
-                      </div>
-
-                      {/* Progress to Next Weekly Streak */}
-                      <div className="mt-3">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>Progress to weekly reward</span>
-                          <span>{streakData.currentStreak}/7 days</span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full bg-blue-500"
-                            style={{
-                              width: `${Math.min(
-                                (streakData.currentStreak / 7) * 100,
-                                100
-                              )}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      {/* Progress to Free Impulse Purchase */}
-                      <div className="mt-3">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>Progress to free impulse</span>
-                          <span>
-                            {streakData.completedStreaks % 3}/3 streaks
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="h-2 rounded-full bg-green-500"
-                            style={{
-                              width: `${
-                                ((streakData.completedStreaks % 3) / 3) * 100
-                              }%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Rewards Card */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-4 pb-0">
-                  <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <Trophy className="w-5 h-5 text-yellow-500" />
-                    Your Rewards
-                  </h2>
-                </div>
-                <div className="p-4">
-                  {/* Free Impulse Purchases */}
-                  <div className="mb-4">
-                    <div className="flex justify-between items-center">
-                      <span className="font-medium">
-                        Free Impulse Purchases
-                      </span>
-                      <span className="bg-green-100 text-green-800 text-xs font-semibold px-3 py-1 rounded-full">
-                        {streakData.freeImpulsePurchases} available
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Use these to make impulse purchases without breaking your
-                      streak
-                    </p>
-                  </div>
-
-                  {/* Vouchers */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="font-medium">Vouchers</span>
-                      <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
-                        {streakData.activeVouchers.length} available
-                      </span>
-                    </div>
-
-                    {streakData.activeVouchers.length === 0 ? (
-                      <p className="text-sm text-gray-500">
-                        Complete a 7-day streak to earn vouchers
-                      </p>
-                    ) : (
-                      <div className="space-y-2">
-                        {streakData.activeVouchers
-                          .slice(0, 2)
-                          .map((voucher) => (
-                            <div
-                              key={voucher._id}
-                              className="p-2 border border-blue-200 rounded-md bg-blue-50 flex justify-between items-center"
-                            >
-                              <div>
-                                <p className="font-medium text-sm">
-                                  {voucher.voucherType === "weekly"
-                                    ? "Weekly Streak Voucher"
-                                    : "Monthly Voucher"}
-                                </p>
-                                <p className="text-xs text-gray-500">
-                                  Expires:{" "}
-                                  {new Date(
-                                    voucher.expiresAt
-                                  ).toLocaleDateString()}
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => {
-                                  setSelectedVoucher(voucher);
-                                  setShowRewardModal(true);
-                                }}
-                                className="text-xs bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600"
-                              >
-                                Use
-                              </button>
-                            </div>
-                          ))}
-                        {streakData.activeVouchers.length > 2 && (
-                          <button
-                            className="w-full text-blue-500 text-sm"
-                            onClick={() => setShowRewardModal(true)}
-                          >
-                            View all {streakData.activeVouchers.length} vouchers
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Recent Transactions Preview */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="p-4 pb-0">
-                  <h2 className="text-xl font-semibold">Recent Transactions</h2>
-                  <p className="text-gray-500 text-sm mt-1">
-                    Your most recent financial activity
-                  </p>
-                </div>
-                <div className="p-4">
-                  {transactionsLoading ? (
-                    <div className="animate-pulse space-y-3">
-                      {[1, 2, 3].map((n) => (
-                        <div
-                          key={n}
-                          className="h-16 bg-gray-200 rounded-lg"
-                        ></div>
-                      ))}
-                    </div>
-                  ) : transactions.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No transactions found</p>
-                      <button
-                        onClick={() => setShowTransactionForm(true)}
-                        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
-                      >
-                        Add Transaction
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {transactions.slice(0, 3).map((transaction) => (
-                        <div
-                          key={transaction._id}
-                          className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                            transaction.type === "income"
-                              ? "bg-green-50 hover:bg-green-100"
-                              : "bg-red-50 hover:bg-red-100"
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`p-2 rounded-lg ${
-                                transaction.type === "income"
-                                  ? "bg-green-100 text-green-600"
-                                  : "bg-red-100 text-red-600"
-                              }`}
-                            >
-                              <CreditCard className="w-4 h-4" />
-                            </div>
-                            <div>
-                              <p className="font-medium">
-                                {transaction.Description || "Unnamed Transaction"}
-                              </p>
-                              <div className="flex gap-2 items-center mt-1">
-                                <span className="text-xs text-gray-500">
-                                  {transaction.Category || "Uncategorized"}
-                                </span>
-                                <span
-                                  className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                    transaction.status || "completed"
-                                  )}`}
-                                >
-                                  {transaction.status || "completed"}
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className={`font-medium ${getTypeColor(
-                                transaction.type || "expense"
-                              )}`}
-                            >
-                              {transaction.type === "income" ? "+" : "-"}$
-                              {Math.abs(transaction.Amount || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                      <button
-                        className="w-full mt-4 text-blue-500 hover:text-blue-600 py-2 font-medium"
-                        onClick={() => setActiveTab("transactions")}
-                      >
-                        View All Transactions
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <FinancialHealthScore
+                score={score}
+                getHealthStatus={getHealthStatus}
+                getHealthColor={getHealthColor}
+                user={user}
+                transactions={transactions}
+                setShowTransactionForm={setShowTransactionForm}
+              />
             </>
           )}
 
           {activeTab === "transactions" && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-              <div className="p-4 pb-0">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold">All Transactions</h2>
+            <div className="p-4">
+              {transactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-gray-500">No transactions found</p>
                   <button
                     onClick={() => setShowTransactionForm(true)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
+                    className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
                   >
-                    <Plus className="w-4 h-4" />
                     Add Transaction
                   </button>
                 </div>
-                <p className="text-gray-500 text-sm mt-1">
-                  Your complete transaction history
-                </p>
-              </div>
-              <div className="p-4">
-                {transactionsLoading ? (
-                  <div className="animate-pulse space-y-3">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <div
-                        key={n}
-                        className="h-16 bg-gray-200 rounded-lg"
-                      ></div>
-                    ))}
-                  </div>
-                ) : transactions.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">No transactions found</p>
-                    <button
-                      onClick={() => setShowTransactionForm(true)}
-                      className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
+              ) : (
+                <div className="space-y-3">
+                  {[...transactions].reverse().map((transaction) => (
+                    <div
+                      key={transaction.id}
+                      className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
+                        transaction.type === "income"
+                          ? "bg-green-50 hover:bg-green-100"
+                          : "bg-red-50 hover:bg-red-100"
+                      }`}
                     >
-                      Add Transaction
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {transactions.map((transaction) => (
-                      <div
-                        key={transaction._id}
-                        className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                          transaction.type === "income"
-                            ? "bg-green-50 hover:bg-green-100"
-                            : "bg-red-50 hover:bg-red-100"
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div
-                            className={`p-2 rounded-lg ${
-                              transaction.type === "income"
-                                ? "bg-green-100 text-green-600"
-                                : "bg-red-100 text-red-600"
-                            }`}
-                          >
-                            <CreditCard className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <p className="font-medium">
-                              {transaction.Description}
-                            </p>
-                            <div className="flex gap-2 items-center mt-1">
-                              <span className="text-xs text-gray-500">
-                                {transaction.Category}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                {new Date(transaction.Date).toLocaleDateString(
-                                  "en-US",
-                                  { month: "short", day: "numeric" }
-                                )}
-                              </span>
-                              <span
-                                className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                  transaction.status || "completed"
-                                )}`}
-                              >
-                                {transaction.status || "completed"}
-                              </span>
-                            </div>
-                          </div>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`p-2 rounded-lg ${
+                            transaction.type === "income"
+                              ? "bg-green-100 text-green-600"
+                              : "bg-red-100 text-red-600"
+                          }`}
+                        >
+                          <CreditCard className="w-4 h-4" />
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`font-medium ${getTypeColor(
-                              transaction.type || "expense"
-                            )}`}
-                          >
-                            {transaction.type === "income" ? "+" : "-"}$
-                            {Math.abs(transaction.Amount).toFixed(2)}
-                          </span>
+                        <div>
+                          <p className="font-medium">
+                            {transaction.description}
+                          </p>
+                          <div className="flex gap-2 items-center mt-1">
+                            <span className="text-xs text-gray-500">
+                              {transaction.category}
+                            </span>
+                            <span className="text-xs text-gray-500">
+                              {new Date(transaction.date).toLocaleDateString(
+                                "en-US",
+                                {
+                                  month: "short",
+                                  day: "numeric",
+                                }
+                              )}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
+                                transaction.status
+                              )}`}
+                            >
+                              {transaction.status}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`font-medium ${getTypeColor(
+                            transaction.type
+                          )}`}
+                        >
+                          {transaction.type === "income" ? "+" : "-"}$
+                          {Math.abs(transaction.amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
-
-      {/* Rewards Modal */}
-      {showRewardModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="flex justify-between items-center border-b p-4">
-              <h3 className="text-xl font-semibold">Your Rewards</h3>
-              <button
-                onClick={() => setShowRewardModal(false)}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6">
-              {/* Free Impulse Purchases */}
-              <div className="mb-6">
-                <h4 className="text-lg font-medium mb-2">
-                  Free Impulse Purchases
-                </h4>
-                <div className="flex justify-between items-center bg-green-50 rounded-lg p-4 border border-green-200">
-                  <div>
-                    <p className="font-medium">
-                      {streakData.freeImpulsePurchases} Available
-                    </p>
-                    <p className="text-sm text-gray-600">
-                      Use when adding an impulse transaction
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setShowRewardModal(false);
-                      setShowTransactionForm(true);
-                    }}
-                    className="px-3 py-1 bg-green-500 text-white text-sm rounded-md"
-                  >
-                    Add Transaction
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Vouchers */}
-              <div>
-                <h4 className="text-lg font-medium mb-2">Your Vouchers</h4>
-                {streakData.activeVouchers.length === 0 ? (
-                  <p className="text-center text-gray-500 py-4">
-                    No active vouchers available
-                  </p>
-                ) : (
-                  <div className="space-y-3 max-h-60 overflow-y-auto">
-                    {streakData.activeVouchers.map((voucher) => (
-                      <div
-                        key={voucher._id}
-                        className={`p-3 rounded-lg border ${
-                          selectedVoucher?._id === voucher._id
-                            ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200"
-                        }`}
-                      >
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="font-medium">
-                              {voucher.voucherType === "weekly"
-                                ? "Weekly Streak Voucher"
-                                : "Monthly Challenge Voucher"}
-                            </p>
-                            <div className="flex gap-4 text-xs text-gray-500 mt-1">
-                              <span>
-                                Earned:{" "}
-                                {new Date(voucher.earnedAt).toLocaleDateString()}
-                              </span>
-                              <span>
-                                Expires:{" "}
-                                {new Date(voucher.expiresAt).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => useVoucher(voucher._id)}
-                            className="px-3 py-1 bg-blue-500 text-white text-sm rounded-md"
-                          >
-                            Use
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
