@@ -68,17 +68,18 @@ export default function Dashboard(): JSX.Element {
   });
   const [userLoading, setUserLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTransactionForm, setShowTransactionForm] = useState<boolean>(false);
+  const [showTransactionForm, setShowTransactionForm] =
+    useState<boolean>(false);
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [formData, setFormData] = useState<TransactionFormData>({
     Description: "",
     Amount: 0,
-    Date: new Date().toISOString().split('T')[0],
+    Date: new Date().toISOString().split("T")[0],
     Category: "",
     is_Need: "Need",
     Time_of_Day: "Morning",
     Payment_Mode: "UPI",
-    Impulse_Tag: false
+    Impulse_Tag: false,
   });
 
   // External chat URL
@@ -89,11 +90,11 @@ export default function Dashboard(): JSX.Element {
     const fetchUserProfile = async () => {
       setUserLoading(true);
       setError(null);
-  
+
       try {
         const token = localStorage.getItem("token");
         console.log("Token available:", !!token);
-        
+
         setUser({
           name: "User",
           email: "user@example.com",
@@ -105,7 +106,7 @@ export default function Dashboard(): JSX.Element {
           address: "",
           phone: "",
         });
-  
+
         if (token) {
           try {
             const response = await fetch("/api/users/profile", {
@@ -115,21 +116,30 @@ export default function Dashboard(): JSX.Element {
                 Authorization: `Bearer ${token}`,
               },
             });
-  
+
             console.log("API response status:", response.status);
-            console.log("API response headers:", Object.fromEntries([...response.headers]));
-            
+            console.log(
+              "API response headers:",
+              Object.fromEntries([...response.headers])
+            );
+
             const rawText = await response.text();
-            console.log("Raw API response (first 100 chars):", rawText.substring(0, 100));
-            
-            if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
+            console.log(
+              "Raw API response (first 100 chars):",
+              rawText.substring(0, 100)
+            );
+
+            if (
+              rawText.trim().startsWith("{") ||
+              rawText.trim().startsWith("[")
+            ) {
               try {
                 const data = JSON.parse(rawText);
                 console.log("Successfully parsed user data:", data);
-                
+
                 if (data && data.user) {
                   const joinDate = new Date(data.user.createdAt || Date.now());
-  
+
                   setUser({
                     name: data.user.fullName || "",
                     email: data.user.email || "",
@@ -142,13 +152,19 @@ export default function Dashboard(): JSX.Element {
                     phone: data.user.phone ? data.user.phone.toString() : "",
                   });
                 } else {
-                  console.warn("API response missing expected user data structure:", data);
+                  console.warn(
+                    "API response missing expected user data structure:",
+                    data
+                  );
                 }
               } catch (jsonError) {
                 console.error("Error parsing response as JSON:", jsonError);
               }
             } else {
-              console.warn("API response is not JSON format:", rawText.substring(0, 100));
+              console.warn(
+                "API response is not JSON format:",
+                rawText.substring(0, 100)
+              );
             }
           } catch (apiError) {
             console.error("API request failed:", apiError);
@@ -160,7 +176,7 @@ export default function Dashboard(): JSX.Element {
         setUserLoading(false);
       }
     };
-  
+
     fetchUserProfile();
   }, []);
 
@@ -177,7 +193,7 @@ export default function Dashboard(): JSX.Element {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const data = await response.json();
           // Transform the data format if needed
@@ -188,7 +204,7 @@ export default function Dashboard(): JSX.Element {
             date: item.Date,
             category: item.Category,
             type: item.Amount > 0 ? "income" : "expense",
-            status: "completed"
+            status: "completed",
           }));
           setTransactions(formattedTransactions);
         } else {
@@ -206,67 +222,83 @@ export default function Dashboard(): JSX.Element {
     fetchTransactions();
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value, type } = e.target;
-    if (type === 'checkbox') {
+    if (type === "checkbox") {
       const checkbox = e.target as HTMLInputElement;
       setFormData({
         ...formData,
-        [name]: checkbox.checked
+        [name]: checkbox.checked,
       });
     } else {
       setFormData({
         ...formData,
-        [name]: value
+        [name]: value,
       });
     }
   };
 
+  // Updated handleSubmitTransaction function
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem("token");
-      const userData = {
+
+      // Make sure Amount is correctly formatted (as a number, not a string)
+      const formattedData = {
         ...formData,
-        User_ID: user.email,
-        Source_App: "FinanceApp"
+        Amount: Number(formData.Amount),
+        User_ID: user.email || "user@example.com", // Fallback if user email is not loaded
+        Source_App: "FinanceApp",
       };
-      
-      const response = await fetch("/api/expenses", {
+
+      console.log("Submitting transaction data:", formattedData);
+
+      const response = await fetch("http://localhost:3000/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(formattedData),
       });
-      
+
+      console.log("Response status:", response.status);
+
       if (response.ok) {
         // Reset form
         setFormData({
           Description: "",
           Amount: 0,
-          Date: new Date().toISOString().split('T')[0],
+          Date: new Date().toISOString().split("T")[0],
           Category: "",
           is_Need: "Need",
           Time_of_Day: "Morning",
           Payment_Mode: "UPI",
-          Impulse_Tag: false
+          Impulse_Tag: false,
         });
-        
+
         // Close the form
         setShowTransactionForm(false);
-        
+
         // Refresh transactions
         fetchTransactions();
+
+        alert("Transaction added successfully!");
       } else {
-        alert("Failed to add transaction. Please try again.");
+        const errorData = await response.text();
+        console.error("Server error:", errorData);
+        alert(
+          `Failed to add transaction: ${response.status} ${response.statusText}`
+        );
       }
     } catch (err) {
       console.error("Error submitting transaction:", err);
-      alert("An error occurred. Please try again.");
+      alert("Network error. Please check your connection and try again.");
     } finally {
       setFormSubmitting(false);
     }
@@ -497,15 +529,18 @@ export default function Dashboard(): JSX.Element {
               <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                 <div className="flex justify-between items-center border-b p-4">
                   <h3 className="text-xl font-semibold">Add New Transaction</h3>
-                  <button 
+                  <button
                     onClick={() => setShowTransactionForm(false)}
                     className="text-gray-500 hover:text-gray-700"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                
-                <form onSubmit={handleSubmitTransaction} className="p-6 space-y-4">
+
+                <form
+                  onSubmit={handleSubmitTransaction}
+                  className="p-6 space-y-4"
+                >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
@@ -521,7 +556,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., Grocery shopping"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Amount
@@ -537,7 +572,7 @@ export default function Dashboard(): JSX.Element {
                         step="0.01"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Date
@@ -551,7 +586,7 @@ export default function Dashboard(): JSX.Element {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Category
@@ -566,7 +601,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., Food, Transport"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Need/Want
@@ -582,7 +617,7 @@ export default function Dashboard(): JSX.Element {
                         <option value="Want">Want</option>
                       </select>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Time of Day
@@ -600,7 +635,7 @@ export default function Dashboard(): JSX.Element {
                         <option value="Night">Night</option>
                       </select>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Payment Mode
@@ -615,7 +650,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., UPI, Cash, Card"
                       />
                     </div>
-                    
+
                     <div className="space-y-2 flex items-center">
                       <label className="flex items-center text-sm font-medium text-gray-700">
                         <input
@@ -629,7 +664,7 @@ export default function Dashboard(): JSX.Element {
                       </label>
                     </div>
                   </div>
-                  
+
                   <div className="pt-4 flex justify-end gap-3">
                     <button
                       type="button"
@@ -650,7 +685,7 @@ export default function Dashboard(): JSX.Element {
               </div>
             </div>
           )}
-        
+
           {activeTab === "dashboard" && (
             <>
               {/* Financial Health Score */}
@@ -736,13 +771,16 @@ export default function Dashboard(): JSX.Element {
                   {transactionsLoading ? (
                     <div className="animate-pulse space-y-3">
                       {[1, 2, 3].map((n) => (
-                        <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
+                        <div
+                          key={n}
+                          className="h-16 bg-gray-200 rounded-lg"
+                        ></div>
                       ))}
                     </div>
                   ) : transactions.length === 0 ? (
                     <div className="text-center py-8">
                       <p className="text-gray-500">No transactions found</p>
-                      <button 
+                      <button
                         onClick={() => setShowTransactionForm(true)}
                         className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
                       >
@@ -801,116 +839,119 @@ export default function Dashboard(): JSX.Element {
                         </div>
                       ))}
                       <button
-                         className="w-full mt-4 text-blue-500 hover:text-blue-600 py-2 font-medium"
-                         onClick={() => setActiveTab("transactions")}
-                       >
-                         View All Transactions
-                       </button>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             </>
-           )}
+                        className="w-full mt-4 text-blue-500 hover:text-blue-600 py-2 font-medium"
+                        onClick={() => setActiveTab("transactions")}
+                      >
+                        View All Transactions
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
-           {activeTab === "transactions" && (
-             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-               <div className="p-4 pb-0">
-                 <div className="flex justify-between items-center">
-                   <h2 className="text-xl font-semibold">All Transactions</h2>
-                   <button
-                     onClick={() => setShowTransactionForm(true)}
-                     className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
-                   >
-                     <Plus className="w-4 h-4" />
-                     Add Transaction
-                   </button>
-                 </div>
-                 <p className="text-gray-500 text-sm mt-1">
-                   Your complete transaction history
-                 </p>
-               </div>
-               <div className="p-4">
-                 {transactionsLoading ? (
-                   <div className="animate-pulse space-y-3">
-                     {[1, 2, 3, 4, 5].map((n) => (
-                       <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
-                     ))}
-                   </div>
-                 ) : transactions.length === 0 ? (
-                   <div className="text-center py-8">
-                     <p className="text-gray-500">No transactions found</p>
-                     <button 
-                       onClick={() => setShowTransactionForm(true)}
-                       className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
-                     >
-                       Add Transaction
-                     </button>
-                   </div>
-                 ) : (
-                   <div className="space-y-3">
-                     {transactions.map((transaction) => (
-                       <div
-                         key={transaction.id}
-                         className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                           transaction.type === "income"
-                             ? "bg-green-50 hover:bg-green-100"
-                             : "bg-red-50 hover:bg-red-100"
-                         }`}
-                       >
-                         <div className="flex items-center gap-3">
-                           <div
-                             className={`p-2 rounded-lg ${
-                               transaction.type === "income"
-                                 ? "bg-green-100 text-green-600"
-                                 : "bg-red-100 text-red-600"
-                             }`}
-                           >
-                             <CreditCard className="w-4 h-4" />
-                           </div>
-                           <div>
-                             <p className="font-medium">
-                               {transaction.description}
-                             </p>
-                             <div className="flex gap-2 items-center mt-1">
-                               <span className="text-xs text-gray-500">
-                                 {transaction.category}
-                               </span>
-                               <span className="text-xs text-gray-500">
-                                 {new Date(transaction.date).toLocaleDateString(
-                                   "en-US",
-                                   { month: "short", day: "numeric" }
-                                 )}
-                               </span>
-                               <span
-                                 className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                   transaction.status
-                                 )}`}
-                               >
-                                 {transaction.status}
-                               </span>
-                             </div>
-                           </div>
-                         </div>
-                         <div className="flex items-center gap-2">
-                           <span
-                             className={`font-medium ${getTypeColor(
-                               transaction.type
-                             )}`}
-                           >
-                             {transaction.type === "income" ? "+" : "-"}$
-                             {Math.abs(transaction.amount).toFixed(2)}
-                           </span>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-               </div>
-             </div>
-           )}
-         </div>
-       </div>
-     </div>
-   );
- }
+          {activeTab === "transactions" && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-4 pb-0">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold">All Transactions</h2>
+                  <button
+                    onClick={() => setShowTransactionForm(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Transaction
+                  </button>
+                </div>
+                <p className="text-gray-500 text-sm mt-1">
+                  Your complete transaction history
+                </p>
+              </div>
+              <div className="p-4">
+                {transactionsLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <div
+                        key={n}
+                        className="h-16 bg-gray-200 rounded-lg"
+                      ></div>
+                    ))}
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No transactions found</p>
+                    <button
+                      onClick={() => setShowTransactionForm(true)}
+                      className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
+                    >
+                      Add Transaction
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {transactions.map((transaction) => (
+                      <div
+                        key={transaction.id}
+                        className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
+                          transaction.type === "income"
+                            ? "bg-green-50 hover:bg-green-100"
+                            : "bg-red-50 hover:bg-red-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`p-2 rounded-lg ${
+                              transaction.type === "income"
+                                ? "bg-green-100 text-green-600"
+                                : "bg-red-100 text-red-600"
+                            }`}
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {transaction.description}
+                            </p>
+                            <div className="flex gap-2 items-center mt-1">
+                              <span className="text-xs text-gray-500">
+                                {transaction.category}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(transaction.date).toLocaleDateString(
+                                  "en-US",
+                                  { month: "short", day: "numeric" }
+                                )}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
+                                  transaction.status
+                                )}`}
+                              >
+                                {transaction.status}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-medium ${getTypeColor(
+                              transaction.type
+                            )}`}
+                          >
+                            {transaction.type === "income" ? "+" : "-"}$
+                            {Math.abs(transaction.amount).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
