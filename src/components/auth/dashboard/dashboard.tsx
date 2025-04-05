@@ -77,17 +77,18 @@ export default function Dashboard(): JSX.Element {
   });
   const [userLoading, setUserLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [showTransactionForm, setShowTransactionForm] = useState<boolean>(false);
+  const [showTransactionForm, setShowTransactionForm] =
+    useState<boolean>(false);
   const [formSubmitting, setFormSubmitting] = useState<boolean>(false);
   const [formData, setFormData] = useState<TransactionFormData>({
     Description: "",
     Amount: 0,
-    Date: new Date().toISOString().split('T')[0],
+    Date: new Date().toISOString().split("T")[0],
     Category: "",
     is_Need: "Need",
     Time_of_Day: "Morning",
     Payment_Mode: "UPI",
-    Impulse_Tag: false
+    Impulse_Tag: false,
   });
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [dashboardLoading, setDashboardLoading] = useState<boolean>(true);
@@ -105,7 +106,24 @@ export default function Dashboard(): JSX.Element {
 
       try {
         const token = localStorage.getItem("token");
+<<<<<<< HEAD
         
+=======
+        console.log("Token available:", !!token);
+
+        setUser({
+          name: "User",
+          email: "user@example.com",
+          memberSince: new Date().toLocaleDateString("en-US", {
+            month: "short",
+            year: "numeric",
+          }),
+          lastLogin: "Just now",
+          address: "",
+          phone: "",
+        });
+
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
         if (token) {
           const response = await fetch("/api/users/profile", {
             method: "GET",
@@ -135,6 +153,61 @@ export default function Dashboard(): JSX.Element {
               address: data.user.address || "",
               phone: data.user.phone ? data.user.phone.toString() : "",
             });
+<<<<<<< HEAD
+=======
+
+            console.log("API response status:", response.status);
+            console.log(
+              "API response headers:",
+              Object.fromEntries([...response.headers])
+            );
+
+            const rawText = await response.text();
+            console.log(
+              "Raw API response (first 100 chars):",
+              rawText.substring(0, 100)
+            );
+
+            if (
+              rawText.trim().startsWith("{") ||
+              rawText.trim().startsWith("[")
+            ) {
+              try {
+                const data = JSON.parse(rawText);
+                console.log("Successfully parsed user data:", data);
+
+                if (data && data.user) {
+                  const joinDate = new Date(data.user.createdAt || Date.now());
+
+                  setUser({
+                    name: data.user.fullName || "",
+                    email: data.user.email || "",
+                    memberSince: joinDate.toLocaleDateString("en-US", {
+                      month: "short",
+                      year: "numeric",
+                    }),
+                    lastLogin: "Just now",
+                    address: data.user.address || "",
+                    phone: data.user.phone ? data.user.phone.toString() : "",
+                  });
+                } else {
+                  console.warn(
+                    "API response missing expected user data structure:",
+                    data
+                  );
+                }
+              } catch (jsonError) {
+                console.error("Error parsing response as JSON:", jsonError);
+              }
+            } else {
+              console.warn(
+                "API response is not JSON format:",
+                rawText.substring(0, 100)
+              );
+            }
+          } catch (apiError) {
+            console.error("API request failed:", apiError);
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
           }
         }
       } catch (err) {
@@ -161,9 +234,10 @@ export default function Dashboard(): JSX.Element {
             Authorization: `Bearer ${token}`,
           },
         });
-        
+
         if (response.ok) {
           const data = await response.json();
+<<<<<<< HEAD
           // Transform backend data to match Transaction interface
           const formattedTransactions = data.expenses?.map((item: any) => ({
             _id: item._id,
@@ -181,6 +255,18 @@ export default function Dashboard(): JSX.Element {
             type: "expense", // Assume expenses by default
             status: "completed", // Default status
           })) || [];
+=======
+          // Transform the data format if needed
+          const formattedTransactions = data.map((item: any) => ({
+            id: item._id,
+            description: item.Description,
+            amount: item.Amount,
+            date: item.Date,
+            category: item.Category,
+            type: item.Amount > 0 ? "income" : "expense",
+            status: "completed",
+          }));
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
           setTransactions(formattedTransactions);
         } else {
           console.error("Failed to fetch transactions");
@@ -261,58 +347,77 @@ export default function Dashboard(): JSX.Element {
     fetchStreakData();
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
     const { name, value, type } = e.target;
-    if (type === 'checkbox') {
+    if (type === "checkbox") {
       const checkbox = e.target as HTMLInputElement;
       setFormData({
         ...formData,
-        [name]: checkbox.checked
+        [name]: checkbox.checked,
       });
     } else {
       setFormData({
         ...formData,
-        [name]: value
+        [name]: value,
       });
     }
   };
 
+<<<<<<< HEAD
   // Update transaction submission to match backend expectations
+=======
+  // Updated handleSubmitTransaction function
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
-    
+
     try {
       const token = localStorage.getItem("token");
-      const userData = {
+
+      // Make sure Amount is correctly formatted (as a number, not a string)
+      const formattedData = {
         ...formData,
+<<<<<<< HEAD
         Source_App: "FinanceApp"
+=======
+        Amount: Number(formData.Amount),
+        User_ID: user.email || "user@example.com", // Fallback if user email is not loaded
+        Source_App: "FinanceApp",
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
       };
-      
-      const response = await fetch("/api/expenses", {
+
+      console.log("Submitting transaction data:", formattedData);
+
+      const response = await fetch("http://localhost:3000/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: token ? `Bearer ${token}` : "",
         },
-        body: JSON.stringify(userData),
+        body: JSON.stringify(formattedData),
       });
-      
+
+      console.log("Response status:", response.status);
+
       if (response.ok) {
         // Reset form
         setFormData({
           Description: "",
           Amount: 0,
-          Date: new Date().toISOString().split('T')[0],
+          Date: new Date().toISOString().split("T")[0],
           Category: "",
           is_Need: "Need",
           Time_of_Day: "Morning",
           Payment_Mode: "UPI",
-          Impulse_Tag: false
+          Impulse_Tag: false,
         });
-        
+
         // Close the form
         setShowTransactionForm(false);
+<<<<<<< HEAD
         
         // Refresh all data
         fetchTransactions();
@@ -321,10 +426,23 @@ export default function Dashboard(): JSX.Element {
       } else {
         const errorData = await response.json();
         alert(errorData.message || "Failed to add transaction. Please try again.");
+=======
+
+        // Refresh transactions
+        fetchTransactions();
+
+        alert("Transaction added successfully!");
+      } else {
+        const errorData = await response.text();
+        console.error("Server error:", errorData);
+        alert(
+          `Failed to add transaction: ${response.status} ${response.statusText}`
+        );
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
       }
     } catch (err) {
       console.error("Error submitting transaction:", err);
-      alert("An error occurred. Please try again.");
+      alert("Network error. Please check your connection and try again.");
     } finally {
       setFormSubmitting(false);
     }
@@ -573,15 +691,18 @@ export default function Dashboard(): JSX.Element {
               <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
                 <div className="flex justify-between items-center border-b p-4">
                   <h3 className="text-xl font-semibold">Add New Transaction</h3>
-                  <button 
+                  <button
                     onClick={() => setShowTransactionForm(false)}
                     className="text-gray-500 hover:text-gray-700"
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
-                
-                <form onSubmit={handleSubmitTransaction} className="p-6 space-y-4">
+
+                <form
+                  onSubmit={handleSubmitTransaction}
+                  className="p-6 space-y-4"
+                >
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
@@ -597,7 +718,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., Grocery shopping"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Amount
@@ -613,7 +734,7 @@ export default function Dashboard(): JSX.Element {
                         step="0.01"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Date
@@ -627,7 +748,7 @@ export default function Dashboard(): JSX.Element {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Category
@@ -642,7 +763,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., Food, Transport"
                       />
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Need/Want
@@ -658,7 +779,7 @@ export default function Dashboard(): JSX.Element {
                         <option value="Want">Want</option>
                       </select>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Time of Day
@@ -676,7 +797,7 @@ export default function Dashboard(): JSX.Element {
                         <option value="Night">Night</option>
                       </select>
                     </div>
-                    
+
                     <div className="space-y-2">
                       <label className="block text-sm font-medium text-gray-700">
                         Payment Mode
@@ -691,7 +812,7 @@ export default function Dashboard(): JSX.Element {
                         placeholder="E.g., UPI, Cash, Card"
                       />
                     </div>
-                    
+
                     <div className="space-y-2 flex items-center">
                       <label className="flex items-center text-sm font-medium text-gray-700">
                         <input
@@ -720,7 +841,7 @@ export default function Dashboard(): JSX.Element {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="pt-4 flex justify-end gap-3">
                     <button
                       type="button"
@@ -741,7 +862,7 @@ export default function Dashboard(): JSX.Element {
               </div>
             </div>
           )}
-        
+
           {activeTab === "dashboard" && (
             <>
               {/* Financial Health Score */}
@@ -878,7 +999,30 @@ export default function Dashboard(): JSX.Element {
                   </p>
                 </div>
                 <div className="p-4">
+<<<<<<< HEAD
                   {transactions && transactions.length > 0 ? (
+=======
+                  {transactionsLoading ? (
+                    <div className="animate-pulse space-y-3">
+                      {[1, 2, 3].map((n) => (
+                        <div
+                          key={n}
+                          className="h-16 bg-gray-200 rounded-lg"
+                        ></div>
+                      ))}
+                    </div>
+                  ) : transactions.length === 0 ? (
+                    <div className="text-center py-8">
+                      <p className="text-gray-500">No transactions found</p>
+                      <button
+                        onClick={() => setShowTransactionForm(true)}
+                        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
+                      >
+                        Add Transaction
+                      </button>
+                    </div>
+                  ) : (
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                     <div className="space-y-3">
                       {transactions.slice(0, 3).map((transaction) => (
                         <div
@@ -936,7 +1080,11 @@ export default function Dashboard(): JSX.Element {
                         View All Transactions
                       </button>
                     </div>
+<<<<<<< HEAD
                   ) : null}
+=======
+                  )}
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                 </div>
               </div>
             </>
@@ -963,13 +1111,24 @@ export default function Dashboard(): JSX.Element {
                 {transactionsLoading ? (
                   <div className="animate-pulse space-y-3">
                     {[1, 2, 3, 4, 5].map((n) => (
+<<<<<<< HEAD
                       <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
+=======
+                      <div
+                        key={n}
+                        className="h-16 bg-gray-200 rounded-lg"
+                      ></div>
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                     ))}
                   </div>
                 ) : transactions.length === 0 ? (
                   <div className="text-center py-8">
                     <p className="text-gray-500">No transactions found</p>
+<<<<<<< HEAD
                     <button 
+=======
+                    <button
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                       onClick={() => setShowTransactionForm(true)}
                       className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
                     >
@@ -980,7 +1139,11 @@ export default function Dashboard(): JSX.Element {
                   <div className="space-y-3">
                     {transactions.map((transaction) => (
                       <div
+<<<<<<< HEAD
                         key={transaction._id}
+=======
+                        key={transaction.id}
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                         className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
                           transaction.type === "income"
                             ? "bg-green-50 hover:bg-green-100"
@@ -999,6 +1162,7 @@ export default function Dashboard(): JSX.Element {
                           </div>
                           <div>
                             <p className="font-medium">
+<<<<<<< HEAD
                               {transaction.Description}
                             </p>
                             <div className="flex gap-2 items-center mt-1">
@@ -1007,16 +1171,33 @@ export default function Dashboard(): JSX.Element {
                               </span>
                               <span className="text-xs text-gray-500">
                                 {new Date(transaction.Date).toLocaleDateString(
+=======
+                              {transaction.description}
+                            </p>
+                            <div className="flex gap-2 items-center mt-1">
+                              <span className="text-xs text-gray-500">
+                                {transaction.category}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(transaction.date).toLocaleDateString(
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                                   "en-US",
                                   { month: "short", day: "numeric" }
                                 )}
                               </span>
                               <span
                                 className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
+<<<<<<< HEAD
                                   transaction.status || "completed"
                                 )}`}
                               >
                                 {transaction.status || "completed"}
+=======
+                                  transaction.status
+                                )}`}
+                              >
+                                {transaction.status}
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                               </span>
                             </div>
                           </div>
@@ -1024,11 +1205,19 @@ export default function Dashboard(): JSX.Element {
                         <div className="flex items-center gap-2">
                           <span
                             className={`font-medium ${getTypeColor(
+<<<<<<< HEAD
                               transaction.type || "expense"
                             )}`}
                           >
                             {transaction.type === "income" ? "+" : "-"}$
                             {Math.abs(transaction.Amount).toFixed(2)}
+=======
+                              transaction.type
+                            )}`}
+                          >
+                            {transaction.type === "income" ? "+" : "-"}$
+                            {Math.abs(transaction.amount).toFixed(2)}
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
                           </span>
                         </div>
                       </div>
@@ -1042,4 +1231,8 @@ export default function Dashboard(): JSX.Element {
       </div>
     </div>
   );
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 1d9cf7adc031260c56f8f8a3ca11c26fdf45f43e
