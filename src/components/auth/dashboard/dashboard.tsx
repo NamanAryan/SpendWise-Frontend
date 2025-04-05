@@ -39,6 +39,13 @@ interface UserProfile {
   lastLogin: string;
   address?: string;
   phone?: string;
+  balance: number;
+}
+
+interface AddMoneyFormData {
+  amount: number;
+  source: string; // e.g., "Bank Transfer", "Credit Card", etc.
+  notes?: string;
 }
 
 interface TransactionFormData {
@@ -57,6 +64,7 @@ type TabType = "dashboard" | "transactions" | "chat";
 export default function Dashboard(): JSX.Element {
   const [score, setScore] = useState<number>(72);
   const [loading, setLoading] = useState<boolean>(false);
+  const [balance, setBalance] = useState<number>(0); 
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(true);
@@ -65,7 +73,17 @@ export default function Dashboard(): JSX.Element {
     email: "loading@example.com",
     memberSince: "Loading...",
     lastLogin: "Loading...",
+    balance: 0, // Initialize with zero balance
   });
+
+  const [showAddMoneyForm, setShowAddMoneyForm] = useState<boolean>(false);
+  const [addMoneySubmitting, setAddMoneySubmitting] = useState<boolean>(false);
+  const [addMoneyFormData, setAddMoneyFormData] = useState<AddMoneyFormData>({
+    amount: 0,
+    source: "Bank Transfer",
+    notes: "",
+  });
+
   const [userLoading, setUserLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [showTransactionForm, setShowTransactionForm] =
@@ -85,6 +103,49 @@ export default function Dashboard(): JSX.Element {
   // External chat URL
   const externalChatUrl = "https://example.com/financial-chat";
 
+  const handleAddMoneyInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >
+  ) => {
+    const { name, value } = e.target;
+    setAddMoneyFormData({
+      ...addMoneyFormData,
+      [name]: name === "amount" ? Number(value) : value,
+    });
+  };
+
+  const handleAddMoney = async (amount: number) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) {
+        console.error("No auth token found.");
+        return;
+      }
+  
+      const response = await fetch("/api/expenses/balance", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ newBalance: amount }),
+      });
+  
+      const data = await response.json();
+  
+      if (!response.ok) {
+        console.error("Failed to update balance:", data.message);
+      } else {
+        console.log("Balance updated successfully:", data.balance);
+        setBalance(data.balance); // 👈 update your frontend state
+      }
+    } catch (error) {
+      console.error("Error in handleAddMoney:", error);
+    }
+  };
+  
+
   // Fetch user profile
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -95,6 +156,7 @@ export default function Dashboard(): JSX.Element {
         const token = localStorage.getItem("token");
         console.log("Token available:", !!token);
 
+        // Default user with zero balance
         setUser({
           name: "User",
           email: "user@example.com",
@@ -105,6 +167,7 @@ export default function Dashboard(): JSX.Element {
           lastLogin: "Just now",
           address: "",
           phone: "",
+          balance: 0,
         });
 
         if (token) {
@@ -118,16 +181,8 @@ export default function Dashboard(): JSX.Element {
             });
 
             console.log("API response status:", response.status);
-            console.log(
-              "API response headers:",
-              Object.fromEntries([...response.headers])
-            );
 
             const rawText = await response.text();
-            console.log(
-              "Raw API response (first 100 chars):",
-              rawText.substring(0, 100)
-            );
 
             if (
               rawText.trim().startsWith("{") ||
@@ -150,6 +205,7 @@ export default function Dashboard(): JSX.Element {
                     lastLogin: "Just now",
                     address: data.user.address || "",
                     phone: data.user.phone ? data.user.phone.toString() : "",
+                    balance: data.user.balance || 0,
                   });
                 } else {
                   console.warn(
@@ -240,7 +296,6 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
-  // Updated handleSubmitTransaction function
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
@@ -248,17 +303,26 @@ export default function Dashboard(): JSX.Element {
     try {
       const token = localStorage.getItem("token");
 
-      // Make sure Amount is correctly formatted (as a number, not a string)
+      // Convert amount to negative for expenses
+      const expenseAmount = -Math.abs(Number(formData.Amount));
+
+      // Check if user has sufficient balance
+      if (user.balance + expenseAmount < 0) {
+        alert("Insufficient balance for this transaction.");
+        setFormSubmitting(false);
+        return;
+      }
+
       const formattedData = {
         ...formData,
-        Amount: Number(formData.Amount),
-        User_ID: user.email || "user@example.com", // Fallback if user email is not loaded
+        Amount: expenseAmount,
+        User_ID: user.email || "user@example.com",
         Source_App: "FinanceApp",
       };
 
       console.log("Submitting transaction data:", formattedData);
 
-      const response = await fetch("http://localhost:3000/api/expenses", {
+      const response = await fetch("/api/expenses", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -270,6 +334,14 @@ export default function Dashboard(): JSX.Element {
       console.log("Response status:", response.status);
 
       if (response.ok) {
+        const data = await response.json();
+
+        // Update user balance in state
+        setUser((prevUser) => ({
+          ...prevUser,
+          balance: data.newBalance,
+        }));
+
         // Reset form
         setFormData({
           Description: "",
@@ -282,10 +354,8 @@ export default function Dashboard(): JSX.Element {
           Impulse_Tag: false,
         });
 
-        // Close the form
+        // Close the form and refresh transactions
         setShowTransactionForm(false);
-
-        // Refresh transactions
         fetchTransactions();
 
         alert("Transaction added successfully!");
@@ -398,6 +468,76 @@ export default function Dashboard(): JSX.Element {
         {/* Left Column - User Profile, Navigation, and Challenges */}
         <div className="lg:col-span-1 space-y-4">
           {/* User Profile Card */}
+
+          {/* Add Money Form Modal */}
+          {showAddMoneyForm && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+                <div className="flex justify-between items-center border-b p-4">
+                  <h3 className="text-xl font-semibold">
+                    Add Money to Account
+                  </h3>
+                  <button
+                    onClick={() => setShowAddMoneyForm(false)}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleAddMoney(addMoneyFormData.amount);
+                  }}
+                  className="p-6 space-y-4"
+                >
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Amount
+                      </label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                          $
+                        </span>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={addMoneyFormData.amount}
+                          onChange={handleAddMoneyInputChange}
+                          required
+                          min="0.01"
+                          step="0.01"
+                          className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddMoneyForm(false)}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 font-medium"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={addMoneySubmitting}
+                      className="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium disabled:opacity-50"
+                    >
+                      {addMoneySubmitting ? "Processing..." : "Add Money"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* Updated User Profile Card with Balance */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="p-6">
               <div className="flex flex-col items-center text-center">
@@ -415,7 +555,27 @@ export default function Dashboard(): JSX.Element {
                   <>
                     <h3 className="text-lg font-semibold">{user.name}</h3>
                     <p className="text-sm text-gray-600">{user.email}</p>
-                    <div className="mt-4 text-sm text-gray-500 space-y-1">
+
+                    {/* Balance Display */}
+                    <div className="mt-4 mb-3 py-3 px-4 bg-green-50 rounded-lg border border-green-100">
+                      <p className="text-sm text-gray-600 mb-1">
+                        Current Balance
+                      </p>
+                      <p className="text-2xl font-bold text-green-600">
+                        ${user.balance.toFixed(2)}
+                      </p>
+                    </div>
+
+                    {/* Add Money Button */}
+                    <button
+                      onClick={() => setShowAddMoneyForm(true)}
+                      className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Money
+                    </button>
+
+                    <div className="text-sm text-gray-500 space-y-1">
                       <p>Member since {user.memberSince}</p>
                       <p>Last login {user.lastLogin}</p>
                       {user.phone && <p>Phone: {user.phone}</p>}
