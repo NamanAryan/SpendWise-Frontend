@@ -64,7 +64,7 @@ type TabType = "dashboard" | "transactions" | "chat";
 export default function Dashboard(): JSX.Element {
   const [score, setScore] = useState<number>(72);
   const [loading, setLoading] = useState<boolean>(false);
-  const [balance, setBalance] = useState<number>(0); 
+  const [balance, setBalance] = useState<number>(0);
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState<boolean>(true);
@@ -122,7 +122,7 @@ export default function Dashboard(): JSX.Element {
         console.error("No auth token found.");
         return;
       }
-  
+
       const response = await fetch("/api/expenses/balance", {
         method: "PATCH",
         headers: {
@@ -131,9 +131,9 @@ export default function Dashboard(): JSX.Element {
         },
         body: JSON.stringify({ newBalance: amount }),
       });
-  
+
       const data = await response.json();
-  
+
       if (!response.ok) {
         console.error("Failed to update balance:", data.message);
       } else {
@@ -144,7 +144,6 @@ export default function Dashboard(): JSX.Element {
       console.error("Error in handleAddMoney:", error);
     }
   };
-  
 
   // Fetch user profile
   useEffect(() => {
@@ -572,7 +571,7 @@ export default function Dashboard(): JSX.Element {
                       className="w-full mb-4 flex items-center justify-center gap-2 px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium"
                     >
                       <Plus className="w-4 h-4" />
-                      Add Money
+                      Set Balance
                     </button>
 
                     <div className="text-sm text-gray-500 space-y-1">
