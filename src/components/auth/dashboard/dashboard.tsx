@@ -15,21 +15,77 @@ import {
 } from "lucide-react";
 
 interface Transaction {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  category: string;
-  type: "income" | "expense";
-  status: "completed" | "pending";
+  _id: string;
+  Description: string;
+  Amount: number;
+  Date: string;
+  Category: string;
+  is_Need: string;
+  Time_of_Day: string;
+  Payment_Mode: string;
+  Impulse_Tag: boolean;
+  free_impulse_purchase?: boolean;
+  User_ID: string;
+  Source_App?: string;
+  // UI helper fields
+  type?: "income" | "expense";
+  status?: "completed" | "pending";
 }
 
-interface Challenge {
-  id: number;
-  title: string;
-  progress: number;
-  reward: string;
-  active: boolean;
+interface StreakData {
+  currentStreak: number;
+  longestStreak: number;
+  completedStreaks: number;
+  freeImpulsePurchases: number;
+  activeVouchers: Voucher[];
+  usedVouchers: Voucher[];
+  lastNonImpulseDate?: string;
+}
+
+interface Voucher {
+  _id: string;
+  voucherType: "weekly" | "monthly";
+  earnedAt: string;
+  used: boolean;
+  expiresAt: string;
+}
+
+interface DashboardData {
+  financialStats: {
+    totalExpenses: number;
+    impulseExpenses: number;
+    nonImpulseExpenses: number;
+    totalAmount: number;
+    impulseAmount: number;
+    nonImpulseAmount: number;
+    impulsePercentage: number;
+    savedAmount: number;
+    categoryBreakdown: any[];
+  };
+  streakInfo: {
+    currentStreakEmoji: string;
+    streakProgress: string;
+    streakProgressPercent: number;
+    nextMilestone: number;
+    completedStreaks: number;
+    freeImpulsePurchases: number;
+    activeVouchers: number;
+    freeImpulseProgress: string;
+    freeImpulseProgressPercent: number;
+    longestStreak: number;
+  };
+  recentTransactions: Transaction[];
+  monthlyTrends: {
+    month: string;
+    totalSpent: number;
+    impulseSpent: number;
+    nonImpulseSpent: number;
+    impulsePct: string;
+  }[];
+  rewards: {
+    activeVouchers: Voucher[];
+    freeImpulsePurchases: number;
+  };
 }
 
 interface UserProfile {
@@ -99,6 +155,21 @@ export default function Dashboard(): JSX.Element {
     Payment_Mode: "UPI",
     Impulse_Tag: false,
   });
+
+  const [streakData, setStreakData] = useState<StreakData>({
+    currentStreak: 0,
+    longestStreak: 0,
+    completedStreaks: 0,
+    freeImpulsePurchases: 0,
+    activeVouchers: [],
+    usedVouchers: [],
+  });
+
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState<boolean>(true);
+  const [showRewardModal, setShowRewardModal] = useState<boolean>(false);
+  const [selectedVoucher, setSelectedVoucher] = useState<Voucher | null>(null);
+  const [usingFreeImpulse, setUsingFreeImpulse] = useState<boolean>(false);
 
   // External chat URL
   const externalChatUrl = "https://example.com/financial-chat";
@@ -241,26 +312,33 @@ export default function Dashboard(): JSX.Element {
     try {
       const token = localStorage.getItem("token");
       if (token) {
-        const response = await fetch("/api/expenses", {
+        const response = await fetch("/api/expenses/my-expenses", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
         });
-
+        
         if (response.ok) {
           const data = await response.json();
-          // Transform the data format if needed
-          const formattedTransactions = data.map((item: any) => ({
-            id: item._id,
-            description: item.Description,
-            amount: item.Amount,
-            date: item.Date,
-            category: item.Category,
-            type: item.Amount > 0 ? "income" : "expense",
-            status: "completed",
-          }));
+          // Transform backend data to match Transaction interface
+          const formattedTransactions = data.expenses?.map((item: any) => ({
+            _id: item._id,
+            Description: item.Description,
+            Amount: item.Amount,
+            Date: item.Date,
+            Category: item.Category,
+            is_Need: item.is_Need,
+            Time_of_Day: item.Time_of_Day,
+            Payment_Mode: item.Payment_Mode,
+            Impulse_Tag: item.Impulse_Tag,
+            User_ID: item.User_ID,
+            Source_App: item.Source_App,
+            // Add these properties for UI display
+            type: "expense", // Assume expenses by default
+            status: "completed", // Default status
+          })) || [];
           setTransactions(formattedTransactions);
         } else {
           console.error("Failed to fetch transactions");
@@ -275,6 +353,84 @@ export default function Dashboard(): JSX.Element {
 
   useEffect(() => {
     fetchTransactions();
+  }, []);
+
+  // Fetch comprehensive dashboard data
+  const fetchDashboardData = async () => {
+    setDashboardLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch("/api/dashboard", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success) {
+            setDashboardData(data);
+
+            // Update score based on financial health
+            const impulsePct = data.financialStats.impulsePercentage;
+            const newScore = Math.max(0, 100 - impulsePct * 1.5);
+            setScore(Math.round(newScore));
+          }
+        } else {
+          console.error("Failed to fetch dashboard data");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
+  // Fetch streak data
+  const fetchStreakData = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch("/api/streaks/mystreak", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.streak) {
+            setStreakData({
+              currentStreak: data.streak.currentStreak,
+              longestStreak: data.streak.longestStreak,
+              completedStreaks: data.streak.completedStreaks,
+              freeImpulsePurchases: data.streak.freeImpulsePurchases,
+              activeVouchers:
+                data.streak.vouchersEarned?.filter(
+                  (v: Voucher) =>
+                    !v.used && new Date(v.expiresAt) > new Date()
+                ) || [],
+              usedVouchers:
+                data.streak.vouchersEarned?.filter((v: Voucher) => v.used) ||
+                [],
+            });
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching streak data:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchDashboardData();
+    fetchStreakData();
   }, []);
 
   const handleInputChange = (
@@ -295,6 +451,10 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
+  const toggleFreeImpulse = () => {
+    setUsingFreeImpulse(!usingFreeImpulse);
+  };
+
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
@@ -305,8 +465,8 @@ export default function Dashboard(): JSX.Element {
       // Convert amount to negative for expenses
       const expenseAmount = -Math.abs(Number(formData.Amount));
 
-      // Check if user has sufficient balance
-      if (user.balance + expenseAmount < 0) {
+      // Check if user has sufficient balance (skip check if using free impulse)
+      if (!usingFreeImpulse && user.balance + expenseAmount < 0) {
         alert("Insufficient balance for this transaction.");
         setFormSubmitting(false);
         return;
@@ -316,7 +476,8 @@ export default function Dashboard(): JSX.Element {
         ...formData,
         Amount: expenseAmount,
         User_ID: user.email || "user@example.com",
-        Source_App: "FinanceApp",
+        Source_App: "SpendWise",
+        useFreeImpulse: formData.Impulse_Tag && usingFreeImpulse,
       };
 
       console.log("Submitting transaction data:", formattedData);
@@ -338,8 +499,15 @@ export default function Dashboard(): JSX.Element {
         // Update user balance in state
         setUser((prevUser) => ({
           ...prevUser,
-          balance: data.newBalance,
+          balance: data.expense?.Amount
+            ? prevUser.balance + data.expense.Amount
+            : prevUser.balance,
         }));
+
+        // Check if a reward was earned
+        if (data.reward) {
+          alert(`${data.reward.message}`);
+        }
 
         // Reset form
         setFormData({
@@ -353,9 +521,14 @@ export default function Dashboard(): JSX.Element {
           Impulse_Tag: false,
         });
 
+        // Reset free impulse state
+        setUsingFreeImpulse(false);
+
         // Close the form and refresh transactions
         setShowTransactionForm(false);
         fetchTransactions();
+        fetchStreakData();
+        fetchDashboardData();
 
         alert("Transaction added successfully!");
       } else {
@@ -370,6 +543,37 @@ export default function Dashboard(): JSX.Element {
       alert("Network error. Please check your connection and try again.");
     } finally {
       setFormSubmitting(false);
+    }
+  };
+
+  const useVoucher = async (voucherId: string) => {
+    try {
+      const token = localStorage.getItem("token");
+      if (!token) return;
+
+      const response = await fetch(`/api/streaks/use-voucher/${voucherId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success) {
+          // Update streak data to reflect voucher usage
+          fetchStreakData();
+          alert("Voucher used successfully!");
+          setSelectedVoucher(null);
+        }
+      } else {
+        const error = await response.json();
+        alert(error.message || "Failed to use voucher");
+      }
+    } catch (err) {
+      console.error("Error using voucher:", err);
+      alert("Error using voucher. Please try again.");
     }
   };
 
@@ -822,6 +1026,19 @@ export default function Dashboard(): JSX.Element {
                         Impulse Purchase
                       </label>
                     </div>
+
+                    <div className="space-y-2 flex items-center">
+                      <label className="flex items-center text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          name="useFreeImpulse"
+                          checked={usingFreeImpulse}
+                          onChange={toggleFreeImpulse}
+                          className="mr-2 h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        Use Free Impulse
+                      </label>
+                    </div>
                   </div>
 
                   <div className="pt-4 flex justify-end gap-3">
@@ -918,6 +1135,189 @@ export default function Dashboard(): JSX.Element {
                 </div>
               </div>
 
+              {/* Streak Card */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-4 pb-0">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Shield className="w-5 h-5 text-orange-500" />
+                    Your Impulse Streak
+                  </h2>
+                </div>
+                <div className="p-4">
+                  <div className="flex flex-col items-center text-center">
+                    {/* Streak Circle */}
+                    <div className="relative w-32 h-32 mb-4">
+                      <div className="absolute inset-0 rounded-full border-4 border-gray-100"></div>
+                      <div
+                        className="absolute inset-0 rounded-full border-4 border-blue-500"
+                        style={{
+                          clipPath: `polygon(0 0, 100% 0, 100% 100%, 0 100%)`,
+                          transform: `rotate(${(streakData.currentStreak / 7) * 360}deg)`,
+                        }}
+                      ></div>
+                      <div className="absolute inset-0 flex items-center justify-center flex-col">
+                        <span className="text-3xl font-bold">
+                          {streakData.currentStreak}
+                        </span>
+                        <span className="text-xs text-gray-500">day streak</span>
+                      </div>
+                    </div>
+
+                    {/* Streak Info */}
+                    <div className="space-y-2 w-full">
+                      <div className="flex justify-between text-sm">
+                        <span>Current Streak:</span>
+                        <span className="font-semibold">
+                          {streakData.currentStreak} days
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Longest Streak:</span>
+                        <span className="font-semibold">
+                          {streakData.longestStreak} days
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Completed Streaks:</span>
+                        <span className="font-semibold">
+                          {streakData.completedStreaks}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Next Milestone:</span>
+                        <span className="font-semibold">
+                          {7 - (streakData.currentStreak % 7)} days
+                        </span>
+                      </div>
+
+                      {/* Progress to Next Weekly Streak */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Progress to weekly reward</span>
+                          <span>{streakData.currentStreak}/7 days</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-blue-500"
+                            style={{
+                              width: `${Math.min(
+                                (streakData.currentStreak / 7) * 100,
+                                100
+                              )}%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+
+                      {/* Progress to Free Impulse Purchase */}
+                      <div className="mt-3">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Progress to free impulse</span>
+                          <span>
+                            {streakData.completedStreaks % 3}/3 streaks
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="h-2 rounded-full bg-green-500"
+                            style={{
+                              width: `${
+                                ((streakData.completedStreaks % 3) / 3) * 100
+                              }%`,
+                            }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Rewards Card */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-4 pb-0">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-yellow-500" />
+                    Your Rewards
+                  </h2>
+                </div>
+                <div className="p-4">
+                  {/* Free Impulse Purchases */}
+                  <div className="mb-4">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">
+                        Free Impulse Purchases
+                      </span>
+                      <span className="bg-green-100 text-green-800 text-xs font-semibold px-3 py-1 rounded-full">
+                        {streakData.freeImpulsePurchases} available
+                      </span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Use these to make impulse purchases without breaking your
+                      streak
+                    </p>
+                  </div>
+
+                  {/* Vouchers */}
+                  <div>
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-medium">Vouchers</span>
+                      <span className="bg-blue-100 text-blue-800 text-xs font-semibold px-3 py-1 rounded-full">
+                        {streakData.activeVouchers.length} available
+                      </span>
+                    </div>
+
+                    {streakData.activeVouchers.length === 0 ? (
+                      <p className="text-sm text-gray-500">
+                        Complete a 7-day streak to earn vouchers
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {streakData.activeVouchers
+                          .slice(0, 2)
+                          .map((voucher) => (
+                            <div
+                              key={voucher._id}
+                              className="p-2 border border-blue-200 rounded-md bg-blue-50 flex justify-between items-center"
+                            >
+                              <div>
+                                <p className="font-medium text-sm">
+                                  {voucher.voucherType === "weekly"
+                                    ? "Weekly Streak Voucher"
+                                    : "Monthly Voucher"}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  Expires:{" "}
+                                  {new Date(
+                                    voucher.expiresAt
+                                  ).toLocaleDateString()}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedVoucher(voucher);
+                                  setShowRewardModal(true);
+                                }}
+                                className="text-xs bg-blue-500 text-white px-3 py-1 rounded-md hover:bg-blue-600"
+                              >
+                                Use
+                              </button>
+                            </div>
+                          ))}
+                        {streakData.activeVouchers.length > 2 && (
+                          <button
+                            className="w-full text-blue-500 text-sm"
+                            onClick={() => setShowRewardModal(true)}
+                          >
+                            View all {streakData.activeVouchers.length} vouchers
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               {/* Recent Transactions Preview */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="p-4 pb-0">
@@ -950,7 +1350,7 @@ export default function Dashboard(): JSX.Element {
                     <div className="space-y-3">
                       {transactions.slice(0, 3).map((transaction) => (
                         <div
-                          key={transaction.id}
+                          key={transaction._id}
                           className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
                             transaction.type === "income"
                               ? "bg-green-50 hover:bg-green-100"
@@ -969,18 +1369,18 @@ export default function Dashboard(): JSX.Element {
                             </div>
                             <div>
                               <p className="font-medium">
-                                {transaction.description}
+                                {transaction.Description || "Unnamed Transaction"}
                               </p>
                               <div className="flex gap-2 items-center mt-1">
                                 <span className="text-xs text-gray-500">
-                                  {transaction.category}
+                                  {transaction.Category || "Uncategorized"}
                                 </span>
                                 <span
                                   className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                    transaction.status
+                                    transaction.status || "completed"
                                   )}`}
                                 >
-                                  {transaction.status}
+                                  {transaction.status || "completed"}
                                 </span>
                               </div>
                             </div>
@@ -988,11 +1388,11 @@ export default function Dashboard(): JSX.Element {
                           <div className="flex items-center gap-2">
                             <span
                               className={`font-medium ${getTypeColor(
-                                transaction.type
+                                transaction.type || "expense"
                               )}`}
                             >
                               {transaction.type === "income" ? "+" : "-"}$
-                              {Math.abs(transaction.amount).toFixed(2)}
+                              {Math.abs(transaction.Amount || 0).toFixed(2)}
                             </span>
                           </div>
                         </div>
@@ -1051,7 +1451,7 @@ export default function Dashboard(): JSX.Element {
                   <div className="space-y-3">
                     {transactions.map((transaction) => (
                       <div
-                        key={transaction.id}
+                        key={transaction._id}
                         className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
                           transaction.type === "income"
                             ? "bg-green-50 hover:bg-green-100"
@@ -1070,24 +1470,24 @@ export default function Dashboard(): JSX.Element {
                           </div>
                           <div>
                             <p className="font-medium">
-                              {transaction.description}
+                              {transaction.Description}
                             </p>
                             <div className="flex gap-2 items-center mt-1">
                               <span className="text-xs text-gray-500">
-                                {transaction.category}
+                                {transaction.Category}
                               </span>
                               <span className="text-xs text-gray-500">
-                                {new Date(transaction.date).toLocaleDateString(
+                                {new Date(transaction.Date).toLocaleDateString(
                                   "en-US",
                                   { month: "short", day: "numeric" }
                                 )}
                               </span>
                               <span
                                 className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                  transaction.status
+                                  transaction.status || "completed"
                                 )}`}
                               >
-                                {transaction.status}
+                                {transaction.status || "completed"}
                               </span>
                             </div>
                           </div>
@@ -1095,11 +1495,11 @@ export default function Dashboard(): JSX.Element {
                         <div className="flex items-center gap-2">
                           <span
                             className={`font-medium ${getTypeColor(
-                              transaction.type
+                              transaction.type || "expense"
                             )}`}
                           >
                             {transaction.type === "income" ? "+" : "-"}$
-                            {Math.abs(transaction.amount).toFixed(2)}
+                            {Math.abs(transaction.Amount).toFixed(2)}
                           </span>
                         </div>
                       </div>
@@ -1111,6 +1511,100 @@ export default function Dashboard(): JSX.Element {
           )}
         </div>
       </div>
+
+      {/* Rewards Modal */}
+      {showRewardModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center border-b p-4">
+              <h3 className="text-xl font-semibold">Your Rewards</h3>
+              <button
+                onClick={() => setShowRewardModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Free Impulse Purchases */}
+              <div className="mb-6">
+                <h4 className="text-lg font-medium mb-2">
+                  Free Impulse Purchases
+                </h4>
+                <div className="flex justify-between items-center bg-green-50 rounded-lg p-4 border border-green-200">
+                  <div>
+                    <p className="font-medium">
+                      {streakData.freeImpulsePurchases} Available
+                    </p>
+                    <p className="text-sm text-gray-600">
+                      Use when adding an impulse transaction
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowRewardModal(false);
+                      setShowTransactionForm(true);
+                    }}
+                    className="px-3 py-1 bg-green-500 text-white text-sm rounded-md"
+                  >
+                    Add Transaction
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Vouchers */}
+              <div>
+                <h4 className="text-lg font-medium mb-2">Your Vouchers</h4>
+                {streakData.activeVouchers.length === 0 ? (
+                  <p className="text-center text-gray-500 py-4">
+                    No active vouchers available
+                  </p>
+                ) : (
+                  <div className="space-y-3 max-h-60 overflow-y-auto">
+                    {streakData.activeVouchers.map((voucher) => (
+                      <div
+                        key={voucher._id}
+                        className={`p-3 rounded-lg border ${
+                          selectedVoucher?._id === voucher._id
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="font-medium">
+                              {voucher.voucherType === "weekly"
+                                ? "Weekly Streak Voucher"
+                                : "Monthly Challenge Voucher"}
+                            </p>
+                            <div className="flex gap-4 text-xs text-gray-500 mt-1">
+                              <span>
+                                Earned:{" "}
+                                {new Date(voucher.earnedAt).toLocaleDateString()}
+                              </span>
+                              <span>
+                                Expires:{" "}
+                                {new Date(voucher.expiresAt).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => useVoucher(voucher._id)}
+                            className="px-3 py-1 bg-blue-500 text-white text-sm rounded-md"
+                          >
+                            Use
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
