@@ -14,14 +14,21 @@ import {
   X,
 } from "lucide-react";
 
+// Update Transaction interface to match the backend model
 interface Transaction {
-  id: number;
-  description: string;
-  amount: number;
-  date: string;
-  category: string;
-  type: "income" | "expense";
-  status: "completed" | "pending";
+  _id: string;
+  Description: string;
+  Amount: number;
+  Date: string;
+  Category: string;
+  is_Need: "Need" | "Want";
+  Time_of_Day: "Morning" | "Afternoon" | "Evening" | "Night";
+  Payment_Mode: string;
+  Impulse_Tag: boolean;
+  free_impulse_purchase?: boolean;
+  User_ID: string;
+  Source_App?: string;
+  created_at?: string;
 }
 
 interface Challenge {
@@ -41,6 +48,7 @@ interface UserProfile {
   phone?: string;
 }
 
+// Update TransactionFormData interface
 interface TransactionFormData {
   Description: string;
   Amount: number;
@@ -50,6 +58,7 @@ interface TransactionFormData {
   Time_of_Day: string;
   Payment_Mode: string;
   Impulse_Tag: boolean;
+  useFreeImpulse?: boolean;
 }
 
 type TabType = "dashboard" | "transactions" | "chat";
@@ -80,6 +89,10 @@ export default function Dashboard(): JSX.Element {
     Payment_Mode: "UPI",
     Impulse_Tag: false
   });
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [dashboardLoading, setDashboardLoading] = useState<boolean>(true);
+  const [streakData, setStreakData] = useState<any>(null);
+  const [streakLoading, setStreakLoading] = useState<boolean>(true);
 
   // External chat URL
   const externalChatUrl = "https://example.com/financial-chat";
@@ -89,88 +102,59 @@ export default function Dashboard(): JSX.Element {
     const fetchUserProfile = async () => {
       setUserLoading(true);
       setError(null);
-  
+
       try {
         const token = localStorage.getItem("token");
-        console.log("Token available:", !!token);
         
-        setUser({
-          name: "User",
-          email: "user@example.com",
-          memberSince: new Date().toLocaleDateString("en-US", {
-            month: "short",
-            year: "numeric",
-          }),
-          lastLogin: "Just now",
-          address: "",
-          phone: "",
-        });
-  
         if (token) {
-          try {
-            const response = await fetch("/api/users/profile", {
-              method: "GET",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
+          const response = await fetch("/api/users/profile", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          
+          if (data && data.user) {
+            const joinDate = new Date(data.user.createdAt || data.user.created_at || Date.now());
+
+            setUser({
+              name: data.user.fullName || "",
+              email: data.user.email || "",
+              memberSince: joinDate.toLocaleDateString("en-US", {
+                month: "short",
+                year: "numeric",
+              }),
+              lastLogin: "Just now",
+              address: data.user.address || "",
+              phone: data.user.phone ? data.user.phone.toString() : "",
             });
-  
-            console.log("API response status:", response.status);
-            console.log("API response headers:", Object.fromEntries([...response.headers]));
-            
-            const rawText = await response.text();
-            console.log("Raw API response (first 100 chars):", rawText.substring(0, 100));
-            
-            if (rawText.trim().startsWith('{') || rawText.trim().startsWith('[')) {
-              try {
-                const data = JSON.parse(rawText);
-                console.log("Successfully parsed user data:", data);
-                
-                if (data && data.user) {
-                  const joinDate = new Date(data.user.createdAt || Date.now());
-  
-                  setUser({
-                    name: data.user.fullName || "",
-                    email: data.user.email || "",
-                    memberSince: joinDate.toLocaleDateString("en-US", {
-                      month: "short",
-                      year: "numeric",
-                    }),
-                    lastLogin: "Just now",
-                    address: data.user.address || "",
-                    phone: data.user.phone ? data.user.phone.toString() : "",
-                  });
-                } else {
-                  console.warn("API response missing expected user data structure:", data);
-                }
-              } catch (jsonError) {
-                console.error("Error parsing response as JSON:", jsonError);
-              }
-            } else {
-              console.warn("API response is not JSON format:", rawText.substring(0, 100));
-            }
-          } catch (apiError) {
-            console.error("API request failed:", apiError);
           }
         }
       } catch (err) {
         console.error("Error in profile loading:", err);
+        setError("Failed to load profile data");
       } finally {
         setUserLoading(false);
       }
     };
-  
+
     fetchUserProfile();
   }, []);
 
-  // Fetch transactions
+  // Update fetchTransactions function to correctly map data
   const fetchTransactions = async () => {
     setTransactionsLoading(true);
     try {
       const token = localStorage.getItem("token");
       if (token) {
-        const response = await fetch("/api/expenses", {
+        const response = await fetch("/api/expenses/my-expenses", {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -180,16 +164,23 @@ export default function Dashboard(): JSX.Element {
         
         if (response.ok) {
           const data = await response.json();
-          // Transform the data format if needed
-          const formattedTransactions = data.map((item: any) => ({
-            id: item._id,
-            description: item.Description,
-            amount: item.Amount,
-            date: item.Date,
-            category: item.Category,
-            type: item.Amount > 0 ? "income" : "expense",
-            status: "completed"
-          }));
+          // Transform backend data to match Transaction interface
+          const formattedTransactions = data.expenses?.map((item: any) => ({
+            _id: item._id,
+            Description: item.Description,
+            Amount: item.Amount,
+            Date: item.Date,
+            Category: item.Category,
+            is_Need: item.is_Need,
+            Time_of_Day: item.Time_of_Day,
+            Payment_Mode: item.Payment_Mode,
+            Impulse_Tag: item.Impulse_Tag,
+            User_ID: item.User_ID,
+            Source_App: item.Source_App,
+            // Add these properties for UI display
+            type: "expense", // Assume expenses by default
+            status: "completed", // Default status
+          })) || [];
           setTransactions(formattedTransactions);
         } else {
           console.error("Failed to fetch transactions");
@@ -202,8 +193,72 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
+  const fetchDashboardData = async () => {
+    setDashboardLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch("/api/dashboard", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setDashboardData(data);
+          
+          // Update score based on financial stats
+          if (data.financialStats) {
+            // Calculate score based on impulse vs non-impulse ratio
+            const impulsePercentage = parseFloat(data.financialStats.impulsePercentage || "0");
+            const newScore = Math.max(0, Math.min(100, 100 - impulsePercentage));
+            setScore(Math.round(newScore));
+          }
+        } else {
+          console.error("Failed to fetch dashboard data");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching dashboard data:", err);
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
+  const fetchStreakData = async () => {
+    setStreakLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch("/api/streaks/mystreak", {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setStreakData(data.streak);
+        } else {
+          console.error("Failed to fetch streak data");
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching streak data:", err);
+    } finally {
+      setStreakLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchDashboardData();
     fetchTransactions();
+    fetchStreakData();
   }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -222,6 +277,7 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
+  // Update transaction submission to match backend expectations
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
@@ -230,7 +286,6 @@ export default function Dashboard(): JSX.Element {
       const token = localStorage.getItem("token");
       const userData = {
         ...formData,
-        User_ID: user.email,
         Source_App: "FinanceApp"
       };
       
@@ -259,10 +314,13 @@ export default function Dashboard(): JSX.Element {
         // Close the form
         setShowTransactionForm(false);
         
-        // Refresh transactions
+        // Refresh all data
         fetchTransactions();
+        fetchDashboardData();
+        fetchStreakData();
       } else {
-        alert("Failed to add transaction. Please try again.");
+        const errorData = await response.json();
+        alert(errorData.message || "Failed to add transaction. Please try again.");
       }
     } catch (err) {
       console.error("Error submitting transaction:", err);
@@ -272,28 +330,46 @@ export default function Dashboard(): JSX.Element {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
-      const token = localStorage.getItem("token");
-      if (token) {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      // Just remove token and redirect - no need for API call
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/login";
     } catch (err) {
       console.error("Logout error:", err);
-    } finally {
-      localStorage.removeItem("token");
-      window.location.href = "/login";
     }
   };
 
   const redirectToChat = () => {
     window.open(externalChatUrl, "_blank");
+  };
+
+  const useFreeImpulse = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      if (token) {
+        const response = await fetch("/api/streaks/use-free-impulse", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          }
+        });
+        
+        if (response.ok) {
+          // Refresh all data
+          fetchStreakData();
+          fetchDashboardData();
+          alert("Free impulse purchase used successfully!");
+        } else {
+          const errorData = await response.json();
+          alert(errorData.message || "Failed to use free impulse purchase.");
+        }
+      }
+    } catch (err) {
+      console.error("Error using free impulse purchase:", err);
+    }
   };
 
   const challenges: Challenge[] = [
@@ -354,10 +430,10 @@ export default function Dashboard(): JSX.Element {
 
   const refreshScore = (): void => {
     setLoading(true);
-    setTimeout(() => {
-      setScore(Math.floor(Math.random() * 100));
-      setLoading(false);
-    }, 1000);
+    fetchDashboardData()
+      .finally(() => {
+        setLoading(false);
+      });
   };
 
   return (
@@ -628,6 +704,21 @@ export default function Dashboard(): JSX.Element {
                         Impulse Purchase
                       </label>
                     </div>
+
+                    {formData.Impulse_Tag && streakData && streakData.freeImpulsePurchases > 0 && (
+                      <div className="space-y-2 flex items-center">
+                        <label className="flex items-center text-sm font-medium text-gray-700">
+                          <input
+                            type="checkbox"
+                            name="useFreeImpulse"
+                            checked={!!formData.useFreeImpulse}
+                            onChange={handleInputChange}
+                            className="mr-2 h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          Use a free impulse purchase ({streakData.freeImpulsePurchases} available)
+                        </label>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="pt-4 flex justify-end gap-3">
@@ -724,6 +815,60 @@ export default function Dashboard(): JSX.Element {
                 </div>
               </div>
 
+              {/* Streak Card */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+                <div className="p-4 pb-0">
+                  <h2 className="text-xl font-semibold flex items-center gap-2">
+                    <Trophy className="w-5 h-5 text-yellow-500" />
+                    Your Streak Progress
+                  </h2>
+                  <p className="text-gray-500 text-sm mt-1">
+                    Track your non-impulse purchase streak
+                  </p>
+                </div>
+                <div className="p-4">
+                  {streakLoading ? (
+                    <div className="animate-pulse space-y-3">
+                      <div className="h-16 bg-gray-200 rounded-lg"></div>
+                    </div>
+                  ) : !streakData ? (
+                    <p className="text-center py-4 text-gray-500">No streak data available</p>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="text-sm font-medium">Current Streak</p>
+                          <p className="text-2xl font-bold">{streakData.currentStreak} days</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Longest Streak</p>
+                          <p className="text-2xl font-bold">{streakData.longestStreak} days</p>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">Free Impulse Purchases</p>
+                          <p className="text-2xl font-bold">{streakData.freeImpulsePurchases}</p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium">Progress to next reward</p>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-blue-500 h-2 rounded-full"
+                            style={{ 
+                              width: `${Math.min((streakData.currentStreak % 7) / 7 * 100, 100)}%` 
+                            }}
+                          ></div>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {7 - (streakData.currentStreak % 7)} more days until you earn a reward!
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {/* Recent Transactions Preview */}
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="p-4 pb-0">
@@ -733,27 +878,11 @@ export default function Dashboard(): JSX.Element {
                   </p>
                 </div>
                 <div className="p-4">
-                  {transactionsLoading ? (
-                    <div className="animate-pulse space-y-3">
-                      {[1, 2, 3].map((n) => (
-                        <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
-                      ))}
-                    </div>
-                  ) : transactions.length === 0 ? (
-                    <div className="text-center py-8">
-                      <p className="text-gray-500">No transactions found</p>
-                      <button 
-                        onClick={() => setShowTransactionForm(true)}
-                        className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
-                      >
-                        Add Transaction
-                      </button>
-                    </div>
-                  ) : (
+                  {transactions && transactions.length > 0 ? (
                     <div className="space-y-3">
                       {transactions.slice(0, 3).map((transaction) => (
                         <div
-                          key={transaction.id}
+                          key={transaction._id}
                           className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
                             transaction.type === "income"
                               ? "bg-green-50 hover:bg-green-100"
@@ -772,18 +901,18 @@ export default function Dashboard(): JSX.Element {
                             </div>
                             <div>
                               <p className="font-medium">
-                                {transaction.description}
+                                {transaction.Description || "Unnamed Transaction"}
                               </p>
                               <div className="flex gap-2 items-center mt-1">
                                 <span className="text-xs text-gray-500">
-                                  {transaction.category}
+                                  {transaction.Category || "Uncategorized"}
                                 </span>
                                 <span
                                   className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                    transaction.status
+                                    transaction.status || "completed"
                                   )}`}
                                 >
-                                  {transaction.status}
+                                  {transaction.status || "completed"}
                                 </span>
                               </div>
                             </div>
@@ -791,126 +920,126 @@ export default function Dashboard(): JSX.Element {
                           <div className="flex items-center gap-2">
                             <span
                               className={`font-medium ${getTypeColor(
-                                transaction.type
+                                transaction.type || "expense"
                               )}`}
                             >
                               {transaction.type === "income" ? "+" : "-"}$
-                              {Math.abs(transaction.amount).toFixed(2)}
+                              {Math.abs(transaction.Amount || 0).toFixed(2)}
                             </span>
                           </div>
                         </div>
                       ))}
                       <button
-                         className="w-full mt-4 text-blue-500 hover:text-blue-600 py-2 font-medium"
-                         onClick={() => setActiveTab("transactions")}
-                       >
-                         View All Transactions
-                       </button>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             </>
-           )}
+                        className="w-full mt-4 text-blue-500 hover:text-blue-600 py-2 font-medium"
+                        onClick={() => setActiveTab("transactions")}
+                      >
+                        View All Transactions
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </>
+          )}
 
-           {activeTab === "transactions" && (
-             <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-               <div className="p-4 pb-0">
-                 <div className="flex justify-between items-center">
-                   <h2 className="text-xl font-semibold">All Transactions</h2>
-                   <button
-                     onClick={() => setShowTransactionForm(true)}
-                     className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
-                   >
-                     <Plus className="w-4 h-4" />
-                     Add Transaction
-                   </button>
-                 </div>
-                 <p className="text-gray-500 text-sm mt-1">
-                   Your complete transaction history
-                 </p>
-               </div>
-               <div className="p-4">
-                 {transactionsLoading ? (
-                   <div className="animate-pulse space-y-3">
-                     {[1, 2, 3, 4, 5].map((n) => (
-                       <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
-                     ))}
-                   </div>
-                 ) : transactions.length === 0 ? (
-                   <div className="text-center py-8">
-                     <p className="text-gray-500">No transactions found</p>
-                     <button 
-                       onClick={() => setShowTransactionForm(true)}
-                       className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
-                     >
-                       Add Transaction
-                     </button>
-                   </div>
-                 ) : (
-                   <div className="space-y-3">
-                     {transactions.map((transaction) => (
-                       <div
-                         key={transaction.id}
-                         className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
-                           transaction.type === "income"
-                             ? "bg-green-50 hover:bg-green-100"
-                             : "bg-red-50 hover:bg-red-100"
-                         }`}
-                       >
-                         <div className="flex items-center gap-3">
-                           <div
-                             className={`p-2 rounded-lg ${
-                               transaction.type === "income"
-                                 ? "bg-green-100 text-green-600"
-                                 : "bg-red-100 text-red-600"
-                             }`}
-                           >
-                             <CreditCard className="w-4 h-4" />
-                           </div>
-                           <div>
-                             <p className="font-medium">
-                               {transaction.description}
-                             </p>
-                             <div className="flex gap-2 items-center mt-1">
-                               <span className="text-xs text-gray-500">
-                                 {transaction.category}
-                               </span>
-                               <span className="text-xs text-gray-500">
-                                 {new Date(transaction.date).toLocaleDateString(
-                                   "en-US",
-                                   { month: "short", day: "numeric" }
-                                 )}
-                               </span>
-                               <span
-                                 className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
-                                   transaction.status
-                                 )}`}
-                               >
-                                 {transaction.status}
-                               </span>
-                             </div>
-                           </div>
-                         </div>
-                         <div className="flex items-center gap-2">
-                           <span
-                             className={`font-medium ${getTypeColor(
-                               transaction.type
-                             )}`}
-                           >
-                             {transaction.type === "income" ? "+" : "-"}$
-                             {Math.abs(transaction.amount).toFixed(2)}
-                           </span>
-                         </div>
-                       </div>
-                     ))}
-                   </div>
-                 )}
-               </div>
-             </div>
-           )}
-         </div>
-       </div>
-     </div>
-   );
- }
+          {activeTab === "transactions" && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div className="p-4 pb-0">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold">All Transactions</h2>
+                  <button
+                    onClick={() => setShowTransactionForm(true)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-green-500 text-white rounded-md hover:bg-green-600 font-medium text-sm"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Transaction
+                  </button>
+                </div>
+                <p className="text-gray-500 text-sm mt-1">
+                  Your complete transaction history
+                </p>
+              </div>
+              <div className="p-4">
+                {transactionsLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <div key={n} className="h-16 bg-gray-200 rounded-lg"></div>
+                    ))}
+                  </div>
+                ) : transactions.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">No transactions found</p>
+                    <button 
+                      onClick={() => setShowTransactionForm(true)}
+                      className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 font-medium"
+                    >
+                      Add Transaction
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {transactions.map((transaction) => (
+                      <div
+                        key={transaction._id}
+                        className={`flex justify-between items-center p-3 rounded-lg transition-colors ${
+                          transaction.type === "income"
+                            ? "bg-green-50 hover:bg-green-100"
+                            : "bg-red-50 hover:bg-red-100"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`p-2 rounded-lg ${
+                              transaction.type === "income"
+                                ? "bg-green-100 text-green-600"
+                                : "bg-red-100 text-red-600"
+                            }`}
+                          >
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <p className="font-medium">
+                              {transaction.Description}
+                            </p>
+                            <div className="flex gap-2 items-center mt-1">
+                              <span className="text-xs text-gray-500">
+                                {transaction.Category}
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                {new Date(transaction.Date).toLocaleDateString(
+                                  "en-US",
+                                  { month: "short", day: "numeric" }
+                                )}
+                              </span>
+                              <span
+                                className={`text-xs px-2 py-0.5 rounded ${getStatusColor(
+                                  transaction.status || "completed"
+                                )}`}
+                              >
+                                {transaction.status || "completed"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`font-medium ${getTypeColor(
+                              transaction.type || "expense"
+                            )}`}
+                          >
+                            {transaction.type === "income" ? "+" : "-"}$
+                            {Math.abs(transaction.Amount).toFixed(2)}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
