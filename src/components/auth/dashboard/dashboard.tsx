@@ -12,6 +12,8 @@ import {
   ExternalLink,
   Plus,
   X,
+  FileText,
+  BarChart,
 } from "lucide-react";
 import FinancialHealthScore from "./FinanceHealthCare";
 interface Transaction {
@@ -23,6 +25,10 @@ interface Transaction {
   type: "income" | "expense";
   status: "completed" | "pending";
 }
+import { useNavigate } from "react-router-dom";
+
+import ChallengesCard from "./Challenges";
+import BudgetSummary from "./BudgetSummary";
 
 interface Challenge {
   id: number;
@@ -61,6 +67,8 @@ interface TransactionFormData {
 }
 
 export default function Dashboard(): JSX.Element {
+  const [isNeed, setIsNeed] = useState("Need"); // default to "Need"
+
   const [balance, setBalance] = useState<number>(0);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [score, setScore] = useState<number>(0);
@@ -75,6 +83,10 @@ export default function Dashboard(): JSX.Element {
     lastLogin: "Loading...",
     balance: 0, // Initialize with zero balance
   });
+  const navigate = useNavigate();
+  const redirectToBudgetSummary = () => {
+    navigate("/budget-summary");
+  };
 
   const [showAddMoneyForm, setShowAddMoneyForm] = useState<boolean>(false);
   const [addMoneySubmitting, setAddMoneySubmitting] = useState<boolean>(false);
@@ -510,6 +522,19 @@ export default function Dashboard(): JSX.Element {
 
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Check if the transaction is a 'Want'
+    if (formData.is_Need === "Want") {
+      const confirmPurchase = window.confirm(
+        "This is an impulsive purchase. Are you sure you want to proceed?"
+      );
+
+      // If user cancels, stop submission
+      if (!confirmPurchase) {
+        return;
+      }
+    }
+
     setFormSubmitting(true);
     try {
       const token = localStorage.getItem("token");
@@ -519,14 +544,12 @@ export default function Dashboard(): JSX.Element {
       const adjustedAmount = isExpense
         ? -Math.abs(Number(formData.Amount))
         : Math.abs(Number(formData.Amount));
-
       // Check balance only for expenses
       if (isExpense && user.balance + adjustedAmount < 0) {
         alert("Insufficient balance for this transaction.");
         setFormSubmitting(false);
         return;
       }
-
       // Create formatted data with base fields
       let formattedData = {
         ...formData,
@@ -534,7 +557,6 @@ export default function Dashboard(): JSX.Element {
         User_ID: user.email || "user@example.com",
         Source_App: "FinanceApp",
       };
-
       // Predict impulse purchase only for expenses
       if (isExpense) {
         const isImpulse = predictImpulseSimple(formattedData);
@@ -543,7 +565,6 @@ export default function Dashboard(): JSX.Element {
           Impulse_Tag: isImpulse,
         };
       }
-
       console.log("Submitting transaction data:", formattedData);
       const response = await fetch("/api/expenses", {
         method: "POST",
@@ -553,7 +574,6 @@ export default function Dashboard(): JSX.Element {
         },
         body: JSON.stringify(formattedData),
       });
-
       console.log("Response status:", response.status);
       if (response.ok) {
         const data = await response.json();
@@ -602,6 +622,7 @@ export default function Dashboard(): JSX.Element {
       Health: 0.1,
       Groceries: 0.2,
       Utilities: 0.1,
+      Income: 0.0,
     };
 
     const timeRiskMap: { [key: string]: number } = {
@@ -900,10 +921,6 @@ export default function Dashboard(): JSX.Element {
                 <PieChart className="w-4 h-4 mr-2" />
                 Analytics
               </button>
-              <button className="w-full text-left px-4 py-2 rounded-md flex items-center hover:bg-gray-100 text-gray-700">
-                <Bell className="w-4 h-4 mr-2" />
-                Notifications
-              </button>
               <button
                 className="w-full text-left px-4 py-2 rounded-md flex items-center hover:bg-gray-100 text-gray-700"
                 onClick={redirectToChat}
@@ -911,49 +928,21 @@ export default function Dashboard(): JSX.Element {
                 <ExternalLink className="w-4 h-4 mr-2" />
                 Financial Chat
               </button>
-              <button className="w-full text-left px-4 py-2 rounded-md flex items-center hover:bg-gray-100 text-gray-700">
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </button>
+              <a
+                href="/budget-summary"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full text-left px-4 py-2 rounded-md flex items-center hover:bg-gray-100 text-gray-700"
+              >
+                <BarChart className="w-4 h-4 mr-2" />
+                Budget Summary
+              </a>
             </div>
           </div>
 
           {/* Challenges Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-4 pb-0">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <Trophy className="w-5 h-5 text-yellow-500" />
-                Your Challenges
-              </h2>
-            </div>
-            <div className="p-4 space-y-4">
-              {challenges.map((challenge) => (
-                <div key={challenge.id} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-medium">{challenge.title}</h4>
-                    <span className="text-xs text-gray-500">
-                      {challenge.reward}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full ${
-                        challenge.active ? "bg-blue-500" : "bg-green-500"
-                      }`}
-                      style={{ width: `${challenge.progress}%` }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-xs text-gray-500">
-                    <span>{challenge.progress}% complete</span>
-                    <span>{challenge.active ? "Active" : "Completed"}</span>
-                  </div>
-                </div>
-              ))}
-              <button className="w-full py-2 px-4 mt-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 font-medium">
-                View All Challenges
-              </button>
-            </div>
-          </div>
+          <ChallengesCard />
+          <BudgetSummary />
         </div>
 
         {/* Right Column - Content */}
@@ -1059,6 +1048,7 @@ export default function Dashboard(): JSX.Element {
                         <option value="Health">Health</option>
                         <option value="Groceries">Groceries</option>
                         <option value="Utilities">Utilities</option>
+                        <option value="Income">Income</option>
                       </select>
                     </div>
 
@@ -1067,11 +1057,19 @@ export default function Dashboard(): JSX.Element {
                         Need/Want
                       </label>
                       <select
-                        name="is_Need"
-                        value={formData.is_Need}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        value={isNeed}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setIsNeed(value);
+
+                          // Show alert immediately if it's a "Want"
+                          if (value === "Want") {
+                            alert(
+                              "⚠️ This is an impulsive purchase. Are you sure it's necessary?"
+                            );
+                          }
+                        }}
+                        className="border p-2 rounded"
                       >
                         <option value="Need">Need</option>
                         <option value="Want">Want</option>
