@@ -1,3 +1,5 @@
+// Updated Login component with improved error handling and API endpoint configuration
+
 import { useState, FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -21,33 +23,63 @@ const Login = () => {
     setError("");
 
     try {
-      const response = await fetch(
-        "/api/users/login",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: formData.email.toLowerCase(),
-            password: formData.password,
-          }),
-        }
+      // Make sure this URL matches your backend API
+      // If using a proxy in vite.config.js, keep it as '/api/users/login'
+      // Otherwise use the full URL including port, e.g. 'http://localhost:3000/api/users/login'
+      const apiUrl = "/api/users/login";
+
+      console.log("Attempting login to:", apiUrl);
+      console.log("With credentials:", { email: formData.email.toLowerCase() });
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: formData.email.toLowerCase(),
+          password: formData.password,
+        }),
+      });
+
+      // Log detailed response info for debugging
+      console.log("Response status:", response.status);
+      console.log(
+        "Response headers:",
+        Object.fromEntries([...response.headers])
       );
 
       const data = await response.json();
+      console.log("Response data:", data);
 
       if (!response.ok) {
         throw new Error(data.message || "Login failed");
       }
 
       if (data.token) {
+        const data = await response.json();
+        console.log(
+          "Full response data structure:",
+          JSON.stringify(data, null, 2)
+        );
+        // Store user data
         localStorage.setItem("token", data.token);
-        localStorage.setItem("user", JSON.stringify(data.user));
+
+        // Create a new user object with balance explicitly set to 0 if not present
+        const userData = {
+          ...data.user,
+          balance: 0, // Always set a default value, regardless of what comes from server
+        };
+
+        localStorage.setItem("user", JSON.stringify(userData));
+
         window.dispatchEvent(new Event("login"));
         navigate("/dashboard");
+      } else {
+        throw new Error("No token received from server");
       }
     } catch (err) {
+      console.error("Login error:", err);
       setError(
         err instanceof Error ? err.message : "Login failed. Please try again."
       );

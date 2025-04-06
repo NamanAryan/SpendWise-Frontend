@@ -6,6 +6,7 @@ import {
   Info,
   Plus,
   CreditCard,
+  Zap,
 } from "lucide-react";
 
 interface Transaction {
@@ -15,6 +16,7 @@ interface Transaction {
   date: string;
   category: string;
   type: "income" | "expense";
+  Impulse_Tag?: boolean; // Using the same property name as backend
 }
 
 interface FinancialHealthScoreProps {
@@ -358,60 +360,92 @@ const FinancialHealthScore: React.FC<FinancialHealthScoreProps> = ({
           </div>
         </div>
       </div>
-      
-      {/* Recent Transactions Section with proper TypeScript */}
-<div className="bg-white rounded-lg shadow-sm border border-gray-200">
-  <div className="p-4">
-    <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
-      <CreditCard className="w-5 h-5 text-blue-500" />
-      Recent Transactions
-    </h2>
-    
-    {transactions.length > 0 ? (
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {(() => {
-              const reversedTransactions: Transaction[] = [...transactions].reverse();
-              return reversedTransactions.slice(0, 5).map((transaction: Transaction) => (
-                <tr key={transaction.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{transaction.description}</td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm ${transaction.type === 'income' ? 'text-green-600 font-semibold' : 'text-red-600 font-semibold'}`}>
-                    {transaction.type === 'income' ? '+' : '-'}${Math.abs(transaction.amount).toFixed(2)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {new Date(transaction.date).toLocaleDateString()}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100">{transaction.category}</span>
-                  </td>
-                </tr>
-              ));
-            })()}
-          </tbody>
-        </table>
+
+      {/* Recent Transactions Section with Impulse Purchase indicator */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div className="p-4">
+          <h2 className="text-xl font-semibold flex items-center gap-2 mb-4">
+            <CreditCard className="w-5 h-5 text-blue-500" />
+            Recent Transactions
+          </h2>
+
+          {transactions.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Amount
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Date
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Category
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {(() => {
+                    const reversedTransactions: Transaction[] = [
+                      ...transactions,
+                    ].reverse();
+                    return reversedTransactions
+                      .slice(0, 5)
+                      .map((transaction: Transaction) => (
+                        <tr key={transaction.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            <div className="flex items-center gap-2">
+                              <span>{transaction.description}</span>
+                              {transaction.type === "expense" &&
+                                transaction.Impulse_Tag && (
+                                  <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-800 flex items-center">
+                                    <Zap className="w-3 h-3 mr-1" />
+                                    impulsive
+                                  </span>
+                                )}
+                            </div>
+                          </td>
+                          <td
+                            className={`px-6 py-4 whitespace-nowrap text-sm ${
+                              transaction.type === "income"
+                                ? "text-green-600 font-semibold"
+                                : "text-red-600 font-semibold"
+                            }`}
+                          >
+                            {transaction.type === "income" ? "+" : "-"}$
+                            {Math.abs(transaction.amount).toFixed(2)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {new Date(transaction.date).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100">
+                              {transaction.category}
+                            </span>
+                          </td>
+                        </tr>
+                      ));
+                  })()}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p>No transactions found.</p>
+              <button
+                onClick={() => setShowTransactionForm(true)}
+                className="mt-3 inline-flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
+              >
+                <Plus className="w-4 h-4" /> Add Your First Transaction
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-    ) : (
-      <div className="text-center py-8 text-gray-500">
-        <p>No transactions found.</p>
-        <button 
-          onClick={() => setShowTransactionForm(true)}
-          className="mt-3 inline-flex items-center gap-1 px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" /> Add Your First Transaction
-        </button>
-      </div>
-    )}
-  </div>
-</div>
     </>
   );
 };

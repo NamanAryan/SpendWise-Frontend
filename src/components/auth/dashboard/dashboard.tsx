@@ -56,8 +56,8 @@ interface TransactionFormData {
   is_Need: string;
   Time_of_Day: string;
   Payment_Mode: string;
-  Impulse_Tag: boolean;
   type: "income" | "expense";
+  Impulse_Tag?: boolean; // Optional property for impulse prediction
 }
 
 export default function Dashboard(): JSX.Element {
@@ -97,7 +97,6 @@ export default function Dashboard(): JSX.Element {
     is_Need: "Need",
     Time_of_Day: "Morning",
     Payment_Mode: "",
-    Impulse_Tag: false,
     type: "expense", // or 'income' by default
   });
 
@@ -218,7 +217,7 @@ export default function Dashboard(): JSX.Element {
   };
 
   // 2. Replace your existing useEffect for score calculation
-  
+
   useEffect(() => {
     if (transactions.length > 0 || user.balance !== undefined) {
       const newScore = calculateFinanceHealthScore(user.balance, transactions);
@@ -466,6 +465,7 @@ export default function Dashboard(): JSX.Element {
 
       if (response.ok) {
         const data = await response.json();
+        console.log("Raw transaction data from API:", data[0]);
         const formatted = data.map((item: any) => ({
           id: item._id,
           description: item.Description,
@@ -473,6 +473,7 @@ export default function Dashboard(): JSX.Element {
           date: item.Date,
           category: item.Category,
           type: item.Amount > 0 ? "income" : "expense",
+          Impulse_Tag: item.Impulse_Tag,
         }));
         console.log("Fetched transactions:", formatted);
 
@@ -510,13 +511,10 @@ export default function Dashboard(): JSX.Element {
   const handleSubmitTransaction = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormSubmitting(true);
-
     try {
       const token = localStorage.getItem("token");
-
       // Determine if it's an expense or income
       const isExpense = formData.type === "expense";
-
       // Make amount negative for expense, positive for income
       const adjustedAmount = isExpense
         ? -Math.abs(Number(formData.Amount))
@@ -529,15 +527,24 @@ export default function Dashboard(): JSX.Element {
         return;
       }
 
-      const formattedData = {
+      // Create formatted data with base fields
+      let formattedData = {
         ...formData,
         Amount: adjustedAmount,
         User_ID: user.email || "user@example.com",
         Source_App: "FinanceApp",
       };
 
-      console.log("Submitting transaction data:", formattedData);
+      // Predict impulse purchase only for expenses
+      if (isExpense) {
+        const isImpulse = predictImpulseSimple(formattedData);
+        formattedData = {
+          ...formattedData,
+          Impulse_Tag: isImpulse,
+        };
+      }
 
+      console.log("Submitting transaction data:", formattedData);
       const response = await fetch("/api/expenses", {
         method: "POST",
         headers: {
@@ -548,16 +555,13 @@ export default function Dashboard(): JSX.Element {
       });
 
       console.log("Response status:", response.status);
-
       if (response.ok) {
         const data = await response.json();
-
         // Update user balance in state
         setUser((prevUser) => ({
           ...prevUser,
           balance: data.newBalance,
         }));
-
         // Reset form
         setFormData({
           Description: "",
@@ -567,14 +571,11 @@ export default function Dashboard(): JSX.Element {
           is_Need: "Need",
           Time_of_Day: "Morning",
           Payment_Mode: "UPI",
-          Impulse_Tag: false,
           type: "expense", // default to expense
         });
-
         // Close form and refresh data
         setShowTransactionForm(false);
         fetchTransactions();
-
         alert("Transaction added successfully!");
       } else {
         const errorData = await response.text();
@@ -590,6 +591,63 @@ export default function Dashboard(): JSX.Element {
       setFormSubmitting(false);
     }
   };
+
+  // Add the impulse prediction function
+  function predictImpulseSimple(transaction: any): boolean {
+    const categoryRisk: { [key: string]: number } = {
+      Shopping: 0.7,
+      Entertainment: 0.8,
+      Dining: 0.6,
+      Travel: 0.5,
+      Health: 0.1,
+      Groceries: 0.2,
+      Utilities: 0.1,
+    };
+
+    const timeRiskMap: { [key: string]: number } = {
+      Night: 0.7,
+      Evening: 0.5,
+      Afternoon: 0.3,
+      Morning: 0.2,
+    };
+
+    // Get the base risks
+    const catRisk = categoryRisk[transaction.Category] || 0.5;
+    const timeRisk = timeRiskMap[transaction.Time_of_Day] || 0.3;
+
+    // Calculate amount factor - higher risk for larger amounts
+    const amount = Math.abs(transaction.Amount);
+    const amountFactor = amount > 5000 ? 0.6 : 0.3;
+
+    // Need vs Want factor
+    const needFactor = transaction.is_Need === "Need" ? 0.2 : 0.7;
+
+    // Weekend factor
+    const date = new Date(transaction.Date);
+    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+    const weekendFactor = isWeekend ? 0.6 : 0.4;
+
+    // Calculate weighted impulse score
+    const impulseScore =
+      catRisk * 0.3 +
+      timeRisk * 0.15 +
+      amountFactor * 0.2 +
+      needFactor * 0.25 +
+      weekendFactor * 0.1;
+
+    console.log("Impulse prediction factors:", {
+      category: transaction.Category,
+      catRisk,
+      timeRisk,
+      amountFactor,
+      needFactor,
+      weekendFactor,
+      impulseScore,
+    });
+
+    // Return true if the score is above threshold
+    return impulseScore > 0.5;
+  }
 
   const handleLogout = async () => {
     try {
@@ -986,15 +1044,22 @@ export default function Dashboard(): JSX.Element {
                       <label className="block text-sm font-medium text-gray-700">
                         Category
                       </label>
-                      <input
-                        type="text"
+                      <select
                         name="Category"
                         value={formData.Category}
                         onChange={handleInputChange}
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="E.g., Food, Transport"
-                      />
+                      >
+                        <option value="">Select Category</option>
+                        <option value="Shopping">Shopping</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Dining">Dining</option>
+                        <option value="Travel">Travel</option>
+                        <option value="Health">Health</option>
+                        <option value="Groceries">Groceries</option>
+                        <option value="Utilities">Utilities</option>
+                      </select>
                     </div>
 
                     <div className="space-y-2">
@@ -1044,19 +1109,6 @@ export default function Dashboard(): JSX.Element {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="E.g., UPI, Cash, Card"
                       />
-                    </div>
-
-                    <div className="space-y-2 flex items-center">
-                      <label className="flex items-center text-sm font-medium text-gray-700">
-                        <input
-                          type="checkbox"
-                          name="Impulse_Tag"
-                          checked={formData.Impulse_Tag}
-                          onChange={handleInputChange}
-                          className="mr-2 h-4 w-4 text-blue-500 focus:ring-blue-500 border-gray-300 rounded"
-                        />
-                        Impulse Purchase
-                      </label>
                     </div>
                   </div>
 
